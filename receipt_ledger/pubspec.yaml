@@ -1,0 +1,47 @@
+name: receipt_ledger
+description: "Receipt OCR Household Ledger App"
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.10.4
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  cupertino_icons: ^1.0.8
+  
+  # State Management
+  flutter_riverpod: ^2.5.1
+  
+  # Local Storage (web-compatible)
+  shared_preferences: ^2.2.2
+  
+  # Network & API
+  dio: ^5.4.3+1
+  
+  # Image Handling
+  image_picker: ^1.1.2
+  
+  # Calendar
+  table_calendar: ^3.1.2
+  
+  # Charts
+  fl_chart: ^0.68.0
+  
+  # QR Code Generation
+  qr_flutter: ^4.1.0
+  
+  # Utilities
+  uuid: ^4.4.2
+  intl: ^0.19.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
