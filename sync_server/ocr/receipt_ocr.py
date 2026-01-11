@@ -44,11 +44,9 @@ class ReceiptOCR:
             if not PADDLE_AVAILABLE:
                 raise RuntimeError("PaddleOCR is not installed. Please install with: pip install paddleocr")
             
-            # 새 버전 PaddleOCR API (use_gpu 등 deprecated 인자 제거)
+            # 새 버전 PaddleOCR API - 필수 인자만 사용
             self._ocr = PaddleOCR(
-                use_angle_cls=True,  # 텍스트 방향 감지
                 lang=self.lang,
-                show_log=False,
             )
         return self._ocr
     
