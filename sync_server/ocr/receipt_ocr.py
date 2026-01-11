@@ -71,17 +71,25 @@ class ReceiptOCR:
             # numpy 배열로 변환
             img_array = np.array(image)
             
-            # OCR 실행
+            # OCR 실행 (새 API: cls 인자 제거)
             ocr = self._get_ocr()
-            result = ocr.ocr(img_array, cls=True)
+            result = ocr.ocr(img_array)
             
-            # 결과 파싱
+            # 결과 파싱 (새 API 형식 대응)
             extracted_texts = []
-            if result and result[0]:
-                for line in result[0]:
+            if result:
+                # 새 API는 result가 리스트의 리스트일 수 있음
+                lines = result[0] if isinstance(result[0], list) else result
+                for line in lines:
                     if line and len(line) >= 2:
-                        text = line[1][0]  # 텍스트
-                        confidence = line[1][1]  # 신뢰도
+                        # 형식: [[좌표], (텍스트, 신뢰도)]
+                        if isinstance(line[1], tuple):
+                            text = line[1][0]
+                            confidence = line[1][1]
+                        else:
+                            # 새 형식 대응
+                            text = str(line.get('text', line.get('rec_text', '')))
+                            confidence = float(line.get('score', line.get('rec_score', 0.9)))
                         extracted_texts.append((text, confidence))
             
             return extracted_texts
