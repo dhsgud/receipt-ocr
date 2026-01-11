@@ -9,7 +9,10 @@ from typing import List, Tuple, Optional
 from pathlib import Path
 
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageFile
+
+# 손상된/불완전한 이미지 로드 허용
+ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 # PaddleOCR import with error handling
 try:
