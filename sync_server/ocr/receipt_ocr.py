@@ -74,7 +74,7 @@ class ReceiptOCR:
             }
             
             print(f"[OCR] Sending request to Llama.cpp server...")
-            response = requests.post(LLAMA_SERVER_URL, json=payload, timeout=120)
+            response = requests.post(LLAMA_SERVER_URL, json=payload, timeout=300)
             
             if response.status_code != 200:
                 raise RuntimeError(f"Llama.cpp server failed: {response.text}")

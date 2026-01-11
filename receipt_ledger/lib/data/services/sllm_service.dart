@@ -13,7 +13,7 @@ class SllmService {
     : _ocrDio = Dio(BaseOptions(
         baseUrl: AppConstants.syncServerUrl,  // OCR는 sync_server와 같은 URL
         connectTimeout: const Duration(seconds: 60),   // 연결 타임아웃 60초
-        receiveTimeout: const Duration(seconds: 120),  // 응답 타임아웃 120초 (OCR 처리 시간 고려)
+        receiveTimeout: const Duration(seconds: 300),  // 응답 타임아웃 300초 (5분)
         headers: {'Content-Type': 'application/json'},
       ));
 
