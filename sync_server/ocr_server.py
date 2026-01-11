@@ -72,6 +72,7 @@ class OCRResponse(BaseModel):
     total_amount: Optional[float] = None
     items: list = []
     raw_text: str = ""
+    category: Optional[str] = None  # 자동 판단된 카테고리
     processing_time_ms: int = 0
 
 
@@ -199,6 +200,7 @@ async def process_receipt_ocr(request: OCRRequest):
                 'total_price': item.total_price,
             } for item in receipt_data.items],
             raw_text=receipt_data.raw_text,
+            category=receipt_data.category,
             processing_time_ms=processing_time,
         )
         
@@ -250,6 +252,7 @@ async def process_receipt_upload(
                 'total_price': item.total_price,
             } for item in receipt_data.items],
             "raw_text": receipt_data.raw_text,
+            "category": receipt_data.category,
             "processing_time_ms": processing_time,
         }
         

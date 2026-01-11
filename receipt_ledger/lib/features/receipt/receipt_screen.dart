@@ -95,8 +95,12 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
           _selectedDate = receiptData.date!;
         }
         
-        // Try to guess category based on store name
-        _selectedCategory = _guessCategory(receiptData.storeName ?? '');
+        // 서버에서 받은 카테고리가 있으면 사용, 없으면 상점명으로 추론
+        if (receiptData.category != null && receiptData.category!.isNotEmpty) {
+          _selectedCategory = receiptData.category!;
+        } else {
+          _selectedCategory = _guessCategory(receiptData.storeName ?? '');
+        }
       });
     } catch (e) {
       setState(() {
@@ -367,6 +371,7 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
                     _buildDebugRow('💰 총액', _receiptData!.totalAmount != null 
                         ? '₩${_receiptData!.totalAmount!.toStringAsFixed(0)}' 
                         : '(인식 안됨)'),
+                    _buildDebugRow('🏷️ 카테고리', _receiptData!.category ?? '(자동 추론)'),
                     _buildDebugRow('📦 품목 수', '${_receiptData!.items.length}개'),
                     if (_receiptData!.items.isNotEmpty) ...[
                       const SizedBox(height: 8),

@@ -5,6 +5,7 @@ class ReceiptData {
   final double? totalAmount;
   final List<ReceiptItem> items;
   final String? rawText;
+  final String? category;  // 서버에서 자동 판단된 카테고리
 
   ReceiptData({
     this.storeName,
@@ -12,6 +13,7 @@ class ReceiptData {
     this.totalAmount,
     this.items = const [],
     this.rawText,
+    this.category,
   });
 
   factory ReceiptData.fromSllmResponse(Map<String, dynamic> json) {
@@ -37,6 +39,7 @@ class ReceiptData {
                    (json['total'] as num?)?.toDouble(),
       items: items,
       rawText: json['raw_text'] as String? ?? json['rawText'] as String?,
+      category: json['category'] as String?,
     );
   }
 
