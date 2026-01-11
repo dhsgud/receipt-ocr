@@ -7,6 +7,7 @@ import 'features/calendar/calendar_screen.dart';
 import 'features/receipt/receipt_screen.dart';
 import 'features/statistics/statistics_screen.dart';
 import 'features/settings/settings_screen.dart';
+import 'data/services/sync_service.dart';
 
 class ReceiptLedgerApp extends ConsumerWidget {
   const ReceiptLedgerApp({super.key});
@@ -26,15 +27,16 @@ class ReceiptLedgerApp extends ConsumerWidget {
   }
 }
 
-class MainNavigationScreen extends StatefulWidget {
+class MainNavigationScreen extends ConsumerStatefulWidget {
   const MainNavigationScreen({super.key});
 
   @override
-  State<MainNavigationScreen> createState() => _MainNavigationScreenState();
+  ConsumerState<MainNavigationScreen> createState() => _MainNavigationScreenState();
 }
 
-class _MainNavigationScreenState extends State<MainNavigationScreen> {
+class _MainNavigationScreenState extends ConsumerState<MainNavigationScreen> {
   int _currentIndex = 0;
+  bool _isSyncing = false;
 
   final List<Widget> _screens = [
     const HomeScreen(),
@@ -43,6 +45,72 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     const StatisticsScreen(),
     const SettingsScreen(),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    // Auto-sync on app start
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _performAutoSync();
+    });
+  }
+
+  Future<void> _performAutoSync() async {
+    if (_isSyncing) return;
+
+    setState(() {
+      _isSyncing = true;
+    });
+
+    try {
+      final syncService = ref.read(syncServiceProvider);
+      
+      // Initialize sync service
+      await syncService.initialize();
+      
+      // Test connection first
+      final isConnected = await syncService.testConnection();
+      
+      if (isConnected) {
+        ref.read(syncStatusProvider.notifier).state = SyncStatus.syncing;
+        
+        final result = await syncService.syncWithServer();
+        
+        if (result.success) {
+          ref.read(syncStatusProvider.notifier).state = SyncStatus.connected;
+          
+          // Refresh data providers
+          ref.invalidate(transactionsProvider);
+          ref.invalidate(selectedDateTransactionsProvider);
+          ref.invalidate(monthlyTransactionsProvider);
+          ref.invalidate(monthlyStatsProvider);
+          
+          if (mounted && (result.uploaded > 0 || result.downloaded > 0)) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('동기화 완료: ↑${result.uploaded} ↓${result.downloaded}'),
+                backgroundColor: AppColors.income,
+                duration: const Duration(seconds: 2),
+              ),
+            );
+          }
+        } else {
+          ref.read(syncStatusProvider.notifier).state = SyncStatus.error;
+        }
+      } else {
+        ref.read(syncStatusProvider.notifier).state = SyncStatus.disconnected;
+      }
+    } catch (e) {
+      ref.read(syncStatusProvider.notifier).state = SyncStatus.error;
+      debugPrint('Auto-sync error: $e');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSyncing = false;
+        });
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -100,3 +168,4 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     );
   }
 }
+

@@ -140,6 +140,73 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
     final syncService = ref.read(syncServiceProvider);
     final repository = ref.read(transactionRepositoryProvider);
 
+    // Check for duplicate transaction
+    final duplicate = await repository.findDuplicateTransaction(
+      storeName: _receiptData?.storeName,
+      date: _selectedDate,
+      amount: amount,
+    );
+
+    if (duplicate != null && mounted) {
+      // Show confirmation dialog
+      final shouldContinue = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.warning_amber_rounded, color: Colors.orange),
+              SizedBox(width: 8),
+              Text('중복 영수증 감지'),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('동일한 거래가 이미 등록되어 있습니다:'),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.grey.withAlpha(30),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('📅 날짜: ${Formatters.dateKorean(duplicate.date)}'),
+                    Text('💰 금액: ${Formatters.currency(duplicate.amount)}'),
+                    if (duplicate.storeName != null)
+                      Text('🏪 상점: ${duplicate.storeName}'),
+                    Text('📝 설명: ${duplicate.description}'),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              const Text('그래도 저장하시겠습니까?'),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('취소'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+              ),
+              child: const Text('저장', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
+      );
+
+      if (shouldContinue != true) {
+        return;
+      }
+    }
+
     final transaction = TransactionModel(
       id: const Uuid().v4(),
       date: _selectedDate,
@@ -182,6 +249,7 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
       });
     }
   }
+
 
   @override
   Widget build(BuildContext context) {

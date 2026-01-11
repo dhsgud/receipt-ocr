@@ -19,7 +19,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   String _myQrData = '';
   String _myKey = '';
   String? _partnerKey;
-  bool _isServerRunning = false;
+  bool _isServerConnected = false;
+  bool _isSyncing = false;
   final _partnerKeyController = TextEditingController();
 
   @override
@@ -39,7 +40,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       final syncService = ref.read(syncServiceProvider);
       await syncService.initialize();
       
-      final qrData = await syncService.generateQrData();
+      final qrData = syncService.generateQrData();
+      final isConnected = await syncService.testConnection();
       
       if (mounted) {
         setState(() {
@@ -47,7 +49,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           _myQrData = qrData;
           _myKey = syncService.myKey;
           _partnerKey = syncService.partnerKey;
-          _isServerRunning = syncService.isServerRunning;
+          _isServerConnected = isConnected;
         });
       }
     } catch (e) {
@@ -62,18 +64,22 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     }
   }
 
-  Future<void> _toggleServer() async {
+  Future<void> _testServerConnection() async {
     final syncService = ref.read(syncServiceProvider);
-    
-    if (_isServerRunning) {
-      await syncService.stopServer();
-    } else {
-      await syncService.startServer();
-    }
+    final isConnected = await syncService.testConnection();
     
     setState(() {
-      _isServerRunning = syncService.isServerRunning;
+      _isServerConnected = isConnected;
     });
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(isConnected ? '서버 연결 성공!' : '서버에 연결할 수 없습니다'),
+          backgroundColor: isConnected ? AppColors.income : AppColors.expense,
+        ),
+      );
+    }
   }
 
   Future<void> _manualPairWithPartner() async {
@@ -86,7 +92,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     }
 
     final syncService = ref.read(syncServiceProvider);
-    await syncService.setPartner(key, 'manual');
+    await syncService.setPartnerKey(key);
     
     setState(() {
       _partnerKey = key;
@@ -104,19 +110,31 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Future<void> _syncNow() async {
+    if (_isSyncing) return;
+    
+    setState(() {
+      _isSyncing = true;
+    });
+
     final syncService = ref.read(syncServiceProvider);
     
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('동기화 중...')),
     );
 
-    final success = await syncService.syncWithPartner();
+    final result = await syncService.syncWithServer();
     
+    setState(() {
+      _isSyncing = false;
+    });
+
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(success ? '동기화 완료!' : '동기화 실패'),
-          backgroundColor: success ? AppColors.income : AppColors.expense,
+          content: Text(result.success 
+              ? '동기화 완료! (업로드: ${result.uploaded}, 다운로드: ${result.downloaded})'
+              : '동기화 실패: ${result.message}'),
+          backgroundColor: result.success ? AppColors.income : AppColors.expense,
         ),
       );
     }
@@ -182,7 +200,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         onChanged: (value) {
                           ref.read(themeModeProvider.notifier).state = value;
                         },
-                        activeColor: AppColors.primary,
+                        activeTrackColor: AppColors.primary,
                       ),
                     ],
                   ),
@@ -191,7 +209,94 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
                 // Sync Section
                 const Text(
-                  '공유 설정',
+                  '데이터 동기화',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.grey,
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                // Server Connection Status
+                StyledCard(
+                  onTap: _testServerConnection,
+                  child: Row(
+                    children: [
+                      Icon(
+                        _isServerConnected ? Icons.cloud_done : Icons.cloud_off,
+                        color: _isServerConnected ? AppColors.income : Colors.grey,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              '동기화 서버',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              _isServerConnected ? '연결됨' : '연결 안됨 (탭하여 재시도)',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: _isServerConnected
+                                    ? AppColors.income
+                                    : Colors.grey,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (_isServerConnected)
+                        const Icon(Icons.check_circle, color: AppColors.income, size: 20),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                // Sync Now Button
+                SizedBox(
+                  width: double.infinity,
+                  height: 50,
+                  child: ElevatedButton.icon(
+                    onPressed: _isServerConnected && !_isSyncing ? _syncNow : null,
+                    icon: _isSyncing 
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Icon(Icons.sync, color: Colors.white),
+                    label: Text(
+                      _isSyncing ? '동기화 중...' : '지금 동기화',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      disabledBackgroundColor: Colors.grey,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 32),
+
+                // Partner Section
+                const Text(
+                  '파트너 공유',
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
@@ -329,73 +434,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     ],
                   ),
                 ),
-                const SizedBox(height: 12),
-
-                // Sync Server
-                StyledCard(
-                  child: Row(
-                    children: [
-                      Icon(
-                        _isServerRunning ? Icons.sync : Icons.sync_disabled,
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              '동기화 서버',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              _isServerRunning ? '실행 중' : '중지됨',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: _isServerRunning
-                                    ? AppColors.income
-                                    : Colors.grey,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Switch.adaptive(
-                        value: _isServerRunning,
-                        onChanged: (_) => _toggleServer(),
-                        activeColor: AppColors.primary,
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 12),
-
-                // Sync Now Button
-                if (_partnerKey != null)
-                  SizedBox(
-                    width: double.infinity,
-                    height: 50,
-                    child: ElevatedButton.icon(
-                      onPressed: _syncNow,
-                      icon: const Icon(Icons.sync, color: Colors.white),
-                      label: const Text(
-                        '지금 동기화',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
-                      ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.primary,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                    ),
-                  ),
 
                 // Clear Partner Button
                 if (_partnerKey != null) ...[

@@ -5,6 +5,9 @@ class AppConstants {
   static const String sllmBaseUrl = 'http://183.96.3.137:408';
   static const String sllmOcrEndpoint = '/v1/chat/completions';
   
+  // Sync Server (same machine as SLLM server)
+  static const String syncServerUrl = 'http://183.96.3.137:8888';
+  
   // App Info
   static const String appName = 'Receipt Ledger';
   static const String appVersion = '1.0.0';

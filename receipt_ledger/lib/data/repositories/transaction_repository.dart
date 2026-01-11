@@ -153,4 +153,40 @@ class TransactionRepository {
         .where((t) => !t.isIncome)
         .fold<double>(0.0, (double sum, t) => sum + t.amount);
   }
+
+  /// Find duplicate transaction by store name, date, and amount
+  /// Returns the duplicate transaction if found, null otherwise
+  Future<TransactionModel?> findDuplicateTransaction({
+    required String? storeName,
+    required DateTime date,
+    required double amount,
+    String? excludeId,
+  }) async {
+    final transactions = await _loadTransactions();
+    
+    for (final t in transactions) {
+      // Skip if this is the same transaction being edited
+      if (excludeId != null && t.id == excludeId) continue;
+      
+      // Check for duplicate: same date, similar amount (within 1 won), and same store
+      final sameDate = t.date.year == date.year &&
+                       t.date.month == date.month &&
+                       t.date.day == date.day;
+      final sameAmount = (t.amount - amount).abs() < 1;
+      final sameStore = storeName != null && 
+                        t.storeName != null &&
+                        t.storeName!.toLowerCase() == storeName.toLowerCase();
+      
+      // If store name is not available, check by date and exact amount only
+      if (storeName == null || t.storeName == null) {
+        if (sameDate && sameAmount) {
+          return t;
+        }
+      } else if (sameDate && sameAmount && sameStore) {
+        return t;
+      }
+    }
+    
+    return null;
+  }
 }
