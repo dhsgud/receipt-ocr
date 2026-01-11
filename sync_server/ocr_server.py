@@ -164,6 +164,7 @@ async def process_receipt_ocr(request: OCRRequest):
     - **preprocess**: 이미지 전처리 여부 (기본값: True)
     """
     import time
+    import traceback
     start_time = time.time()
     
     try:
@@ -173,14 +174,22 @@ async def process_receipt_ocr(request: OCRRequest):
             image_data = image_data.split(',')[1]
         
         image_bytes = base64.b64decode(image_data)
+        print(f"[OCR] Received image: {len(image_bytes)} bytes")
         
-        # 이미지 전처리
+        # 이미지 전처리 (실패해도 계속 진행)
+        original_bytes = image_bytes
         if request.preprocess:
-            image_bytes = preprocess_receipt_image(image_bytes)
+            try:
+                image_bytes = preprocess_receipt_image(image_bytes)
+                print(f"[OCR] Preprocessed image: {len(image_bytes)} bytes")
+            except Exception as prep_err:
+                print(f"[OCR] Preprocess failed, using original: {prep_err}")
+                image_bytes = original_bytes
         
         # OCR 실행
         ocr = get_ocr_engine()
         ocr_results = ocr.process_image(image_bytes)
+        print(f"[OCR] Extracted {len(ocr_results)} text lines")
         
         # 텍스트 파싱
         parser = get_parser()
@@ -188,6 +197,7 @@ async def process_receipt_ocr(request: OCRRequest):
         
         # 처리 시간 계산
         processing_time = int((time.time() - start_time) * 1000)
+        print(f"[OCR] Processing completed in {processing_time}ms")
         
         return OCRResponse(
             store_name=receipt_data.store_name,
@@ -205,6 +215,8 @@ async def process_receipt_ocr(request: OCRRequest):
         )
         
     except Exception as e:
+        print(f"[OCR ERROR] {str(e)}")
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"OCR 처리 실패: {str(e)}")
 
 
