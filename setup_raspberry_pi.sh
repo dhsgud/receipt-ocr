@@ -1,9 +1,10 @@
 #!/bin/bash
-# Receipt Ledger Sync Server - 라즈베리파이 설치 스크립트
+# Receipt Ledger Sync + OCR Server - 라즈베리파이 설치 스크립트
+# PaddleOCR 기반 영수증 OCR 서버
 
 echo "========================================"
-echo "  Receipt Ledger Sync Server 설치"
-echo "  For Raspberry Pi"
+echo "  Receipt Ledger OCR Server 설치"
+echo "  For Raspberry Pi 5"
 echo "========================================"
 echo ""
 
@@ -11,32 +12,40 @@ echo ""
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 SYNC_DIR="$SCRIPT_DIR/sync_server"
 
-# Python 및 pip 확인
-echo "[1/4] Python 환경 확인 중..."
-if ! command -v python3 &> /dev/null; then
-    echo "Python3가 설치되어 있지 않습니다. 설치합니다..."
-    sudo apt update
-    sudo apt install -y python3 python3-pip python3-venv
-fi
+# 시스템 패키지 확인
+echo "[1/6] 시스템 패키지 설치 중..."
+sudo apt update
+sudo apt install -y python3 python3-pip python3-venv
+sudo apt install -y libatlas-base-dev libopenblas-dev
+sudo apt install -y libgl1-mesa-glx libglib2.0-0
 
 # 가상환경 생성
-echo "[2/4] Python 가상환경 설정 중..."
+echo "[2/6] Python 가상환경 설정 중..."
 cd "$SYNC_DIR"
 python3 -m venv venv
 source venv/bin/activate
 
-# 의존성 설치
-echo "[3/4] 의존성 패키지 설치 중..."
-pip install --upgrade pip
-pip install fastapi uvicorn pydantic
+# pip 업그레이드
+echo "[3/6] pip 업그레이드 중..."
+pip install --upgrade pip wheel setuptools
+
+# 기본 의존성 설치
+echo "[4/6] 기본 패키지 설치 중..."
+pip install fastapi uvicorn pydantic python-multipart
+pip install numpy Pillow opencv-python-headless
+
+# PaddleOCR 설치 (시간이 오래 걸림)
+echo "[5/6] PaddleOCR 설치 중... (최대 10분 소요)"
+pip install paddlepaddle
+pip install paddleocr
 
 # systemd 서비스 파일 생성
-echo "[4/4] Systemd 서비스 설정 중..."
+echo "[6/6] Systemd 서비스 설정 중..."
 SERVICE_FILE="/etc/systemd/system/receipt-sync.service"
 
-sudo tee $SERVICE_FILE > /dev/null << EOF
+sudo tee $SERVICE_FILE > /dev/null <<EOF
 [Unit]
-Description=Receipt Ledger Sync Server
+Description=Receipt Ledger OCR Server
 After=network.target
 
 [Service]
@@ -44,9 +53,11 @@ Type=simple
 User=$USER
 WorkingDirectory=$SYNC_DIR
 Environment="PATH=$SYNC_DIR/venv/bin"
-ExecStart=$SYNC_DIR/venv/bin/python -m uvicorn sync_server:app --host 0.0.0.0 --port 8888
+ExecStart=$SYNC_DIR/venv/bin/python -m uvicorn ocr_server:app --host 0.0.0.0 --port 8888
 Restart=always
 RestartSec=10
+# OCR 처리에 충분한 메모리 할당
+MemoryMax=1G
 
 [Install]
 WantedBy=multi-user.target
@@ -68,5 +79,7 @@ echo "서버 재시작:   sudo systemctl restart receipt-sync"
 echo "서버 중지:     sudo systemctl stop receipt-sync"
 echo ""
 echo "서버 포트: 8888"
+echo "OCR 테스트: curl http://localhost:8888/api/ocr/status"
 echo "공유기에서 8888 포트를 라즈베리파이 IP로 포워딩하세요."
 echo ""
+

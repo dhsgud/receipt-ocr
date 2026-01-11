@@ -1,9 +1,12 @@
-# Receipt Ledger Sync Server - 라즈베리파이 설치 가이드
+# Receipt Ledger OCR Server - 라즈베리파이 설치 가이드
+
+PaddleOCR 기반 영수증 OCR 서버를 라즈베리파이에 설치합니다.
 
 ## 📋 준비물
-- 라즈베리파이 5 (Raspberry Pi OS 설치됨)
+- 라즈베리파이 5 (4GB 이상 권장) + Raspberry Pi OS 64-bit
 - 인터넷 연결
 - SSH 접속 또는 직접 터미널 접근
+
 
 ---
 
@@ -48,7 +51,11 @@ sudo journalctl -u receipt-sync -f
 
 ### 연결 테스트
 ```bash
+# 헬스 체크
 curl http://localhost:8888/health
+
+# OCR 상태 확인
+curl http://localhost:8888/api/ocr/status
 ```
 
 ---
