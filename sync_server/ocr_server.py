@@ -439,4 +439,4 @@ async def startup_event():
 if __name__ == "__main__":
     import uvicorn
     import json
-    uvicorn.run(app, host="0.0.0.0", port=8888)
+    uvicorn.run(app, host="0.0.0.0", port=9999)

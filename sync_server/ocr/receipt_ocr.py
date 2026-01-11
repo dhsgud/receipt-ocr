@@ -13,8 +13,8 @@ from PIL import Image, ImageFile
 # 손상된/불완전한 이미지 로드 허용
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
-# Llama.cpp 서버 설정
-LLAMA_SERVER_URL = "http://localhost:8080/v1/chat/completions"
+# Llama.cpp 서버 설정 (사용자가 8888 포트에 띄움)
+LLAMA_SERVER_URL = "http://localhost:8888/v1/chat/completions"
 
 class ReceiptOCR:
     """Llama.cpp 기반 영수증 OCR 클라이언트"""
@@ -28,12 +28,6 @@ class ReceiptOCR:
     def process_image(self, image_data: bytes) -> Dict[str, Any]:
         """
         이미지에서 텍스트 추출 및 구조화된 데이터 반환
-        
-        Args:
-            image_data: 이미지 바이트 데이터
-            
-        Returns:
-            Extracted JSON data
         """
         try:
             # 이미지 로드 및 검증 (PIL 사용)
@@ -45,7 +39,7 @@ class ReceiptOCR:
             
             # Llama.cpp 서버 요청
             payload = {
-                "model": "Nanonets-OCR2-3B-GGUF", # 모델 이름은 서버 로드 시 정해지지만 명시
+                "model": "user-model", # 모델명은 서버에 로드된 것을 따름 (alias 사용 권장)
                 "messages": [
                     {
                         "role": "user",

@@ -10,7 +10,7 @@ class AppConstants {
   static const String ocrEndpoint = '/api/ocr';
   
   // Sync Server (same machine as SLLM server)
-  static const String syncServerUrl = 'http://183.96.3.137:8888';
+  static const String syncServerUrl = 'http://183.96.3.137:9999';
 
   
   // App Info
