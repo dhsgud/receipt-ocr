@@ -1,224 +1,139 @@
 """
-Receipt OCR Module using PaddleOCR
-한국어 영수증 이미지에서 텍스트를 추출하는 모듈
+Receipt OCR Module using Llama.cpp Server
+Nanonets-OCR2-3B-GGUF 모델을 사용하는 로컬 Llama.cpp 서버와 통신
 """
 
 import io
+import json
 import base64
-from typing import List, Tuple, Optional
-from pathlib import Path
-
-import numpy as np
+import requests
+from typing import List, Tuple, Optional, Any, Dict
 from PIL import Image, ImageFile
 
 # 손상된/불완전한 이미지 로드 허용
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
-# PaddleOCR import with error handling
-try:
-    from paddleocr import PaddleOCR
-    PADDLE_AVAILABLE = True
-except ImportError:
-    PADDLE_AVAILABLE = False
-    print("Warning: PaddleOCR not installed. OCR functionality will be limited.")
-
+# Llama.cpp 서버 설정
+LLAMA_SERVER_URL = "http://localhost:8080/v1/chat/completions"
 
 class ReceiptOCR:
-    """PaddleOCR 기반 영수증 텍스트 추출기"""
+    """Llama.cpp 기반 영수증 OCR 클라이언트"""
     
     def __init__(self, use_gpu: bool = False, lang: str = 'korean'):
         """
-        OCR 엔진 초기화
-        
-        Args:
-            use_gpu: GPU 사용 여부 (라즈베리파이에서는 False)
-            lang: 언어 설정 ('korean', 'en', 'ch' 등)
+        초기화
         """
-        self.use_gpu = use_gpu
         self.lang = lang
-        self._ocr = None
         
-    def _get_ocr(self) -> 'PaddleOCR':
-        """OCR 엔진 lazy initialization"""
-        if self._ocr is None:
-            if not PADDLE_AVAILABLE:
-                raise RuntimeError("PaddleOCR is not installed. Please install with: pip install paddleocr")
-            
-            # 새 버전 PaddleOCR API - 필수 인자만 사용
-            self._ocr = PaddleOCR(
-                lang=self.lang,
-            )
-        return self._ocr
-    
-    def process_image(self, image_data: bytes) -> List[Tuple[str, float]]:
+    def process_image(self, image_data: bytes) -> Dict[str, Any]:
         """
-        이미지에서 텍스트 추출
+        이미지에서 텍스트 추출 및 구조화된 데이터 반환
         
         Args:
             image_data: 이미지 바이트 데이터
             
         Returns:
-            List of (text, confidence) tuples
+            Extracted JSON data
         """
         try:
-            # 이미지 로드
+            # 이미지 로드 및 검증 (PIL 사용)
             image = Image.open(io.BytesIO(image_data))
+            # 다시 바이트로 변환 (검증된 이미지)
+            buffered = io.BytesIO()
+            image.save(buffered, format="JPEG")
+            img_str = base64.b64encode(buffered.getvalue()).decode('utf-8')
             
-            # RGB로 변환 (투명 배경 처리)
-            if image.mode in ('RGBA', 'P'):
-                image = image.convert('RGB')
-            
-            # numpy 배열로 변환
-            img_array = np.array(image)
-            
-            # OCR 실행 (새 API: cls 인자 제거)
-            ocr = self._get_ocr()
-            result = ocr.ocr(img_array)
-            
-            # 결과 파싱 (새 API 형식 대응)
-            extracted_texts = []
-            if result:
-                # 새 API는 result가 리스트의 리스트일 수 있음
-                lines = result[0] if isinstance(result[0], list) else result
-                for line in lines:
-                    if line and len(line) >= 2:
-                        # 형식: [[좌표], (텍스트, 신뢰도)]
-                        if isinstance(line[1], tuple):
-                            text = line[1][0]
-                            confidence = line[1][1]
-                        else:
-                            # 새 형식 대응
-                            text = str(line.get('text', line.get('rec_text', '')))
-                            confidence = float(line.get('score', line.get('rec_score', 0.9)))
-                        extracted_texts.append((text, confidence))
-            
-            return extracted_texts
-            
-        except Exception as e:
-            raise RuntimeError(f"OCR processing failed: {str(e)}")
-    
-    def process_base64(self, base64_image: str) -> List[Tuple[str, float]]:
-        """
-        Base64 인코딩된 이미지에서 텍스트 추출
-        
-        Args:
-            base64_image: Base64 인코딩된 이미지 문자열
-            
-        Returns:
-            List of (text, confidence) tuples
-        """
-        # data:image/jpeg;base64, 접두어 제거
-        if ',' in base64_image:
-            base64_image = base64_image.split(',')[1]
-        
-        image_data = base64.b64decode(base64_image)
-        return self.process_image(image_data)
-    
-    def get_raw_text(self, image_data: bytes, min_confidence: float = 0.5) -> str:
-        """
-        이미지에서 전체 텍스트를 하나의 문자열로 추출
-        
-        Args:
-            image_data: 이미지 바이트 데이터
-            min_confidence: 최소 신뢰도 임계값
-            
-        Returns:
-            추출된 전체 텍스트
-        """
-        texts = self.process_image(image_data)
-        filtered_texts = [text for text, conf in texts if conf >= min_confidence]
-        return '\n'.join(filtered_texts)
-    
-    def get_text_with_positions(self, image_data: bytes) -> List[dict]:
-        """
-        이미지에서 텍스트와 위치 정보 추출
-        
-        Args:
-            image_data: 이미지 바이트 데이터
-            
-        Returns:
-            List of dicts with 'text', 'confidence', 'bbox' keys
-        """
-        try:
-            # 이미지 로드
-            image = Image.open(io.BytesIO(image_data))
-            
-            if image.mode in ('RGBA', 'P'):
-                image = image.convert('RGB')
-            
-            img_array = np.array(image)
-            
-            # OCR 실행
-            ocr = self._get_ocr()
-            result = ocr.ocr(img_array, cls=True)
-            
-            # 결과 파싱
-            extracted = []
-            if result and result[0]:
-                for line in result[0]:
-                    if line and len(line) >= 2:
-                        bbox = line[0]  # [[x1,y1], [x2,y2], [x3,y3], [x4,y4]]
-                        text = line[1][0]
-                        confidence = line[1][1]
-                        
-                        # bbox를 단순화 (좌상단, 우하단)
-                        x_coords = [p[0] for p in bbox]
-                        y_coords = [p[1] for p in bbox]
-                        
-                        extracted.append({
-                            'text': text,
-                            'confidence': confidence,
-                            'bbox': {
-                                'x1': min(x_coords),
-                                'y1': min(y_coords),
-                                'x2': max(x_coords),
-                                'y2': max(y_coords),
+            # Llama.cpp 서버 요청
+            payload = {
+                "model": "Nanonets-OCR2-3B-GGUF", # 모델 이름은 서버 로드 시 정해지지만 명시
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": "Extract valid JSON from this receipt. Fields: store_name, date (YYYY-MM-DD), total_amount (int), items (list of {name, quantity, unit_price, total_price})."},
+                            {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_str}"}}
+                        ]
+                    }
+                ],
+                "temperature": 0.1,
+                "max_tokens": 1024,
+                "json_schema": {
+                    "type": "object",
+                    "properties": {
+                        "store_name": {"type": "string"},
+                        "date": {"type": "string"},
+                        "total_amount": {"type": "integer"},
+                        "items": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "name": {"type": "string"},
+                                    "quantity": {"type": "integer"},
+                                    "unit_price": {"type": "integer"},
+                                    "total_price": {"type": "integer"}
+                                }
                             }
-                        })
+                        }
+                    }
+                }
+            }
             
-            return extracted
+            print(f"[OCR] Sending request to Llama.cpp server...")
+            response = requests.post(LLAMA_SERVER_URL, json=payload, timeout=120)
+            
+            if response.status_code != 200:
+                raise RuntimeError(f"Llama.cpp server failed: {response.text}")
+                
+            result = response.json()
+            content = result['choices'][0]['message']['content']
+            
+            print(f"[OCR] Llama.cpp response: {content[:100]}...")
+            
+            # JSON 파싱 시도
+            try:
+                data = json.loads(content)
+                return data
+            except json.JSONDecodeError:
+                # Markdown 코드 블록 제거 시도
+                if "```json" in content:
+                    content = content.split("```json")[1].split("```")[0].strip()
+                    return json.loads(content)
+                elif "```" in content:
+                    content = content.split("```")[1].split("```")[0].strip()
+                    return json.loads(content)
+                else:
+                    raise RuntimeError("Failed to parse JSON from Llama.cpp response")
             
         except Exception as e:
+            print(f"[OCR ERROR] {str(e)}")
+            # 에러 발생 시 빈 데이터 반환 대신 에러 전파
             raise RuntimeError(f"OCR processing failed: {str(e)}")
 
+    def process_base64(self, base64_image: str) -> Dict[str, Any]:
+        """Base64 이미지 처리"""
+        if ',' in base64_image:
+            base64_image = base64_image.split(',')[1]
+        image_data = base64.b64decode(base64_image)
+        return self.process_image(image_data)
 
 def preprocess_receipt_image(image_data: bytes) -> bytes:
     """
     영수증 이미지 전처리
-    
-    - 그레이스케일 변환
-    - 대비 향상
-    - 노이즈 제거
-    
-    Args:
-        image_data: 원본 이미지 바이트 데이터
-        
-    Returns:
-        전처리된 이미지 바이트 데이터
+    (Llama.cpp는 원본 이미지를 잘 처리할 수 있으므로 최소한의 처리만 수행)
     """
     try:
-        from PIL import ImageEnhance, ImageFilter
-        
+        from PIL import ImageEnhance
         image = Image.open(io.BytesIO(image_data))
-        
-        # RGB로 변환
         if image.mode in ('RGBA', 'P'):
             image = image.convert('RGB')
         
-        # 대비 향상
-        enhancer = ImageEnhance.Contrast(image)
-        image = enhancer.enhance(1.5)
-        
-        # 선명도 향상
-        enhancer = ImageEnhance.Sharpness(image)
-        image = enhancer.enhance(1.5)
-        
-        # 바이트로 변환
+        # 크기 조정 (너무 큰 이미지는 리사이즈)
+        if max(image.size) > 2048:
+            image.thumbnail((2048, 2048))
+            
         output = io.BytesIO()
-        image.save(output, format='JPEG', quality=95)
+        image.save(output, format='JPEG', quality=85)
         return output.getvalue()
-        
-    except Exception as e:
-        # 전처리 실패 시 원본 반환
-        print(f"Image preprocessing failed: {e}")
+    except Exception:
         return image_data

@@ -1,14 +1,15 @@
 """
-Receipt OCR Server with PaddleOCR
-기존 sync_server와 통합된 OCR 서버
+Receipt OCR Server with Llama.cpp
+기존 sync_server와 통합된 OCR 서버 (Llama.cpp Backend)
 """
 
 import io
 import base64
 import sqlite3
+import traceback
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
+from typing import Optional, List, Dict, Any
 from contextlib import contextmanager
 
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
@@ -17,15 +18,14 @@ from pydantic import BaseModel
 
 # Import OCR modules
 from ocr.receipt_ocr import ReceiptOCR, preprocess_receipt_image
-from ocr.text_parser import ReceiptParser
 
 # Database path
 DB_PATH = Path(__file__).parent / "sync_data.db"
 
 app = FastAPI(
     title="Receipt Ledger OCR Server",
-    description="PaddleOCR 기반 영수증 OCR 서버",
-    version="2.0.0"
+    description="Llama.cpp 기반 영수증 OCR 서버",
+    version="2.1.0"
 )
 
 # CORS 설정
@@ -39,8 +39,6 @@ app.add_middleware(
 
 # OCR 엔진 초기화 (싱글톤)
 ocr_engine: Optional[ReceiptOCR] = None
-receipt_parser: Optional[ReceiptParser] = None
-
 
 def get_ocr_engine() -> ReceiptOCR:
     """OCR 엔진 싱글톤"""
@@ -50,14 +48,6 @@ def get_ocr_engine() -> ReceiptOCR:
     return ocr_engine
 
 
-def get_parser() -> ReceiptParser:
-    """파서 싱글톤"""
-    global receipt_parser
-    if receipt_parser is None:
-        receipt_parser = ReceiptParser()
-    return receipt_parser
-
-
 # Pydantic Models
 class OCRRequest(BaseModel):
     """Base64 이미지 OCR 요청"""
@@ -65,14 +55,20 @@ class OCRRequest(BaseModel):
     preprocess: bool = True  # 이미지 전처리 여부
 
 
+class ReceiptItem(BaseModel):
+    name: str
+    quantity: int
+    unit_price: int
+    total_price: int
+
 class OCRResponse(BaseModel):
     """OCR 응답"""
     store_name: Optional[str] = None
     date: Optional[str] = None
-    total_amount: Optional[float] = None
-    items: list = []
+    total_amount: Optional[int] = None
+    items: List[ReceiptItem] = []
     raw_text: str = ""
-    category: Optional[str] = None  # 자동 판단된 카테고리
+    category: Optional[str] = None
     processing_time_ms: int = 0
 
 
@@ -158,13 +154,9 @@ def row_to_transaction(row: sqlite3.Row) -> dict:
 @app.post("/api/ocr", response_model=OCRResponse)
 async def process_receipt_ocr(request: OCRRequest):
     """
-    Base64 인코딩된 이미지에서 영수증 정보 추출
-    
-    - **image**: Base64 인코딩된 이미지 문자열
-    - **preprocess**: 이미지 전처리 여부 (기본값: True)
+    Base64 인코딩된 이미지에서 영수증 정보 추출 (Llama.cpp)
     """
     import time
-    import traceback
     start_time = time.time()
     
     try:
@@ -176,41 +168,32 @@ async def process_receipt_ocr(request: OCRRequest):
         image_bytes = base64.b64decode(image_data)
         print(f"[OCR] Received image: {len(image_bytes)} bytes")
         
-        # 이미지 전처리 (실패해도 계속 진행)
-        original_bytes = image_bytes
+        # 이미지 전처리
         if request.preprocess:
-            try:
-                image_bytes = preprocess_receipt_image(image_bytes)
-                print(f"[OCR] Preprocessed image: {len(image_bytes)} bytes")
-            except Exception as prep_err:
-                print(f"[OCR] Preprocess failed, using original: {prep_err}")
-                image_bytes = original_bytes
+            image_bytes = preprocess_receipt_image(image_bytes)
+            print(f"[OCR] Preprocessed: {len(image_bytes)} bytes")
         
-        # OCR 실행
+        # OCR 실행 (Llama.cpp)
         ocr = get_ocr_engine()
-        ocr_results = ocr.process_image(image_bytes)
-        print(f"[OCR] Extracted {len(ocr_results)} text lines")
-        
-        # 텍스트 파싱
-        parser = get_parser()
-        receipt_data = parser.parse(ocr_results)
+        result = ocr.process_image(image_bytes)
+        print(f"[OCR] Result: {result}")
         
         # 처리 시간 계산
         processing_time = int((time.time() - start_time) * 1000)
-        print(f"[OCR] Processing completed in {processing_time}ms")
         
+        # 결과 매핑
         return OCRResponse(
-            store_name=receipt_data.store_name,
-            date=receipt_data.date,
-            total_amount=receipt_data.total_amount,
+            store_name=result.get('store_name'),
+            date=result.get('date'),
+            total_amount=result.get('total_amount'),
             items=[{
-                'name': item.name,
-                'quantity': item.quantity,
-                'unit_price': item.unit_price,
-                'total_price': item.total_price,
-            } for item in receipt_data.items],
-            raw_text=receipt_data.raw_text,
-            category=receipt_data.category,
+                'name': item.get('name', 'Unknown'),
+                'quantity': item.get('quantity', 1),
+                'unit_price': item.get('unit_price', 0),
+                'total_price': item.get('total_price', 0),
+            } for item in result.get('items', [])],
+            raw_text=json.dumps(result, ensure_ascii=False), # 전체 JSON을 raw_text로 저장
+            category=None, # 카테고리는 클라이언트에서 추론하거나 LLM에 요청 가능
             processing_time_ms=processing_time,
         )
         
@@ -227,9 +210,6 @@ async def process_receipt_upload(
 ):
     """
     파일 업로드로 영수증 OCR 처리
-    
-    - **file**: 영수증 이미지 파일
-    - **preprocess**: 이미지 전처리 여부
     """
     import time
     start_time = time.time()
@@ -244,27 +224,18 @@ async def process_receipt_upload(
         
         # OCR 실행
         ocr = get_ocr_engine()
-        ocr_results = ocr.process_image(image_bytes)
-        
-        # 텍스트 파싱
-        parser = get_parser()
-        receipt_data = parser.parse(ocr_results)
+        result = ocr.process_image(image_bytes)
         
         # 처리 시간 계산
         processing_time = int((time.time() - start_time) * 1000)
         
         return {
-            "store_name": receipt_data.store_name,
-            "date": receipt_data.date,
-            "total_amount": receipt_data.total_amount,
-            "items": [{
-                'name': item.name,
-                'quantity': item.quantity,
-                'unit_price': item.unit_price,
-                'total_price': item.total_price,
-            } for item in receipt_data.items],
-            "raw_text": receipt_data.raw_text,
-            "category": receipt_data.category,
+            "store_name": result.get('store_name'),
+            "date": result.get('date'),
+            "total_amount": result.get('total_amount'),
+            "items": result.get('items', []),
+            "raw_text": json.dumps(result, ensure_ascii=False),
+            "category": None,
             "processing_time_ms": processing_time,
         }
         
@@ -276,13 +247,11 @@ async def process_receipt_upload(
 async def ocr_status():
     """OCR 엔진 상태 확인"""
     try:
-        # OCR 엔진 초기화 확인
-        ocr = get_ocr_engine()
+        # Llama.cpp 서버 상태 체크 로직 필요 (이 예제에서는 단순 리턴)
         return {
             "status": "ready",
-            "engine": "PaddleOCR",
-            "language": ocr.lang,
-            "gpu": ocr.use_gpu,
+            "engine": "Llama.cpp (Nanonets-OCR2-3B)",
+            "gpu": False,
         }
     except Exception as e:
         return {
@@ -299,7 +268,7 @@ async def health_check():
     return {
         "status": "ok",
         "time": datetime.now().isoformat(),
-        "version": "2.0.0",
+        "version": "2.1.0",
         "features": ["sync", "ocr"],
     }
 
@@ -309,7 +278,7 @@ async def root():
     """API 정보"""
     return {
         "name": "Receipt Ledger OCR Server",
-        "version": "2.0.0",
+        "version": "2.1.0",
         "endpoints": {
             "ocr": "/api/ocr",
             "ocr_upload": "/api/ocr/upload",
@@ -464,11 +433,10 @@ async def sync_transactions(request: SyncRequest):
 @app.on_event("startup")
 async def startup_event():
     init_db()
-    # Pre-initialize OCR engine (optional, for faster first request)
-    # get_ocr_engine()
-    print("Server started with OCR support")
+    print("Server started with OCR support (Llama.cpp)")
 
 
 if __name__ == "__main__":
     import uvicorn
+    import json
     uvicorn.run(app, host="0.0.0.0", port=8888)
