@@ -12,12 +12,12 @@ echo ""
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 SYNC_DIR="$SCRIPT_DIR/sync_server"
 
-# 시스템 패키지 확인
+# 시스템 패키지 확인 (Raspberry Pi OS Bookworm 호환)
 echo "[1/6] 시스템 패키지 설치 중..."
 sudo apt update
 sudo apt install -y python3 python3-pip python3-venv
-sudo apt install -y libatlas-base-dev libopenblas-dev
-sudo apt install -y libgl1-mesa-glx libglib2.0-0
+sudo apt install -y libatlas3-base libopenblas-dev || true
+sudo apt install -y libgl1 libglib2.0-0t64 || true
 
 # 가상환경 생성
 echo "[2/6] Python 가상환경 설정 중..."
