@@ -24,6 +24,7 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
   bool _isProcessing = false;
   ReceiptData? _receiptData;
   String? _errorMessage;
+  bool _showDebugInfo = true; // 디버그 모드 ON/OFF
 
   // Form controllers
   final _descriptionController = TextEditingController();
@@ -318,6 +319,89 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
                         _errorMessage!,
                         style: const TextStyle(color: AppColors.expense),
                       ),
+                    ),
+                  ],
+                ),
+              ),
+
+            // OCR 디버그 정보 표시
+            if (_showDebugInfo && _receiptData != null)
+              Container(
+                margin: const EdgeInsets.only(top: 16),
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.blue.withAlpha(25),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.blue.withAlpha(75)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Row(
+                          children: [
+                            Icon(Icons.bug_report, color: Colors.blue, size: 20),
+                            SizedBox(width: 8),
+                            Text(
+                              'OCR 분석 결과 (디버그)',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: Colors.blue,
+                              ),
+                            ),
+                          ],
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close, size: 18),
+                          onPressed: () => setState(() => _showDebugInfo = false),
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    _buildDebugRow('🏪 상점명', _receiptData!.storeName ?? '(인식 안됨)'),
+                    _buildDebugRow('📅 날짜', _receiptData!.date?.toString().split(' ')[0] ?? '(인식 안됨)'),
+                    _buildDebugRow('💰 총액', _receiptData!.totalAmount != null 
+                        ? '₩${_receiptData!.totalAmount!.toStringAsFixed(0)}' 
+                        : '(인식 안됨)'),
+                    _buildDebugRow('📦 품목 수', '${_receiptData!.items.length}개'),
+                    if (_receiptData!.items.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      const Text('품목 목록:', style: TextStyle(fontWeight: FontWeight.w500)),
+                      ...(_receiptData!.items.take(5).map((item) => Padding(
+                        padding: const EdgeInsets.only(left: 8, top: 4),
+                        child: Text('• ${item.name}: ₩${item.totalPrice.toStringAsFixed(0)}',
+                          style: const TextStyle(fontSize: 12)),
+                      ))),
+                      if (_receiptData!.items.length > 5)
+                        Padding(
+                          padding: const EdgeInsets.only(left: 8, top: 4),
+                          child: Text('... 외 ${_receiptData!.items.length - 5}개',
+                            style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                        ),
+                    ],
+                    const SizedBox(height: 8),
+                    ExpansionTile(
+                      title: const Text('원본 텍스트 보기', style: TextStyle(fontSize: 12)),
+                      tilePadding: EdgeInsets.zero,
+                      childrenPadding: const EdgeInsets.only(top: 8),
+                      children: [
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Colors.grey.withAlpha(30),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            _receiptData!.rawText ?? '(없음)',
+                            style: const TextStyle(fontSize: 10, fontFamily: 'monospace'),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -632,6 +716,27 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
           ),
         );
       }).toList(),
+    );
+  }
+
+  Widget _buildDebugRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 80,
+            child: Text(label, style: const TextStyle(fontSize: 12)),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
