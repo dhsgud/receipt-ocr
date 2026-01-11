@@ -31,13 +31,12 @@ pip install --upgrade pip wheel setuptools
 
 # 기본 의존성 설치
 echo "[4/6] 기본 패키지 설치 중..."
-pip install fastapi uvicorn pydantic python-multipart
-pip install numpy Pillow opencv-python-headless
+pip install fastapi uvicorn pydantic python-multipart requests Pillow
+# 이전 PaddleOCR 관련 패키지 제거 (필요 시)
+pip uninstall -y paddlepaddle paddleocr opencv-python-headless || true
 
-# PaddleOCR 설치 (시간이 오래 걸림)
-echo "[5/6] PaddleOCR 설치 중... (최대 10분 소요)"
-pip install paddlepaddle
-pip install paddleocr
+# PaddleOCR 설치 (제거됨 - Llama.cpp 사용)
+echo "[5/6] Llama.cpp 연동 설정 (모델은 별도 실행 필요)"
 
 # systemd 서비스 파일 생성
 echo "[6/6] Systemd 서비스 설정 중..."
@@ -45,7 +44,7 @@ SERVICE_FILE="/etc/systemd/system/receipt-sync.service"
 
 sudo tee $SERVICE_FILE > /dev/null <<EOF
 [Unit]
-Description=Receipt Ledger OCR Server
+Description=Receipt Ledger OCR Server (Llama.cpp Backend)
 After=network.target
 
 [Service]
@@ -53,11 +52,9 @@ Type=simple
 User=$USER
 WorkingDirectory=$SYNC_DIR
 Environment="PATH=$SYNC_DIR/venv/bin"
-ExecStart=$SYNC_DIR/venv/bin/python -m uvicorn ocr_server:app --host 0.0.0.0 --port 8888
+ExecStart=$SYNC_DIR/venv/bin/python -m uvicorn ocr_server:app --host 0.0.0.0 --port 9999
 Restart=always
 RestartSec=10
-# OCR 처리에 충분한 메모리 할당
-MemoryMax=1G
 
 [Install]
 WantedBy=multi-user.target
@@ -76,10 +73,11 @@ echo ""
 echo "서버 상태 확인: sudo systemctl status receipt-sync"
 echo "서버 로그 확인: sudo journalctl -u receipt-sync -f"
 echo "서버 재시작:   sudo systemctl restart receipt-sync"
-echo "서버 중지:     sudo systemctl stop receipt-sync"
 echo ""
-echo "서버 포트: 8888"
-echo "OCR 테스트: curl http://localhost:8888/api/ocr/status"
-echo "공유기에서 8888 포트를 라즈베리파이 IP로 포워딩하세요."
+echo "⚠️ 중요: Llama.cpp 서버가 별도로 실행 중이어야 합니다!"
+echo "Llama Server Port: 8888"
+echo "OCR Server Port:   9999"
+echo ""
+echo "공유기에서 9999 포트를 라즈베리파이 IP로 포워딩하세요."
 echo ""
 
