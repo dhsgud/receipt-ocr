@@ -14,6 +14,7 @@ class TransactionModel {
   final DateTime createdAt;
   final DateTime updatedAt;
   final bool isSynced;
+  final String? calendarEventId;  // 연동된 캘린더 이벤트 ID
 
   TransactionModel({
     required this.id,
@@ -28,6 +29,7 @@ class TransactionModel {
     required this.createdAt,
     required this.updatedAt,
     this.isSynced = false,
+    this.calendarEventId,
   });
 
   /// Create a copy with modified fields
@@ -44,6 +46,7 @@ class TransactionModel {
     DateTime? createdAt,
     DateTime? updatedAt,
     bool? isSynced,
+    String? calendarEventId,
   }) {
     return TransactionModel(
       id: id ?? this.id,
@@ -58,6 +61,7 @@ class TransactionModel {
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       isSynced: isSynced ?? this.isSynced,
+      calendarEventId: calendarEventId ?? this.calendarEventId,
     );
   }
 
@@ -76,6 +80,7 @@ class TransactionModel {
       'createdAt': createdAt.toIso8601String(),
       'updatedAt': updatedAt.toIso8601String(),
       'isSynced': isSynced ? 1 : 0,
+      'calendarEventId': calendarEventId,
     };
   }
 
@@ -94,6 +99,7 @@ class TransactionModel {
       createdAt: DateTime.parse(map['createdAt'] as String),
       updatedAt: DateTime.parse(map['updatedAt'] as String),
       isSynced: map['isSynced'] == 1,
+      calendarEventId: map['calendarEventId'] as String?,
     );
   }
 

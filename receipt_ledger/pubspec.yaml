@@ -43,6 +43,9 @@ dependencies:
   
   # Path Provider (for model storage)
   path_provider: ^2.1.2
+  
+  # Calendar Integration
+  device_calendar: ^4.3.0
 
 dev_dependencies:
   flutter_test:

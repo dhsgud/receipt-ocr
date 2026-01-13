@@ -134,3 +134,13 @@ final ocrServerUrlProvider = StateProvider<String>((ref) {
   return 'http://183.96.3.137:9999';
 });
 
+// ============================================================================
+// 캘린더 연동 관련 Providers
+// ============================================================================
+
+/// 캘린더 동기화 활성화 여부
+final calendarSyncEnabledProvider = StateProvider<bool>((ref) => false);
+
+/// 선택된 캘린더 ID
+final selectedCalendarIdProvider = StateProvider<String?>((ref) => null);
+

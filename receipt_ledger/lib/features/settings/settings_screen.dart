@@ -7,6 +7,7 @@ import '../../core/theme/app_theme.dart';
 import '../../shared/providers/app_providers.dart';
 import '../../shared/widgets/common_widgets.dart';
 import 'local_model_manager.dart';
+import 'calendar_settings_screen.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -453,6 +454,61 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 ],
                 const SizedBox(height: 32),
                 
+                // Calendar Integration Section
+                const Text(
+                  '캘린더 연동',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.grey,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                StyledCard(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const CalendarSettingsScreen(),
+                      ),
+                    );
+                  },
+                  child: Row(
+                    children: [
+                      const Icon(Icons.calendar_month, color: AppColors.primary),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              '캘린더 동기화 설정',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Consumer(
+                              builder: (context, ref, _) {
+                                final isEnabled = ref.watch(calendarSyncEnabledProvider);
+                                return Text(
+                                  isEnabled ? '활성화됨' : '비활성화됨',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: isEnabled ? AppColors.income : Colors.grey,
+                                  ),
+                                );
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Icon(Icons.chevron_right, color: Colors.grey),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 32),
                 // OCR Model Section
                 const Text(
                   'OCR 모델 설정 (실험실)',

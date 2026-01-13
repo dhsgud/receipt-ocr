@@ -154,6 +154,15 @@ class TransactionRepository {
         .fold<double>(0.0, (double sum, t) => sum + t.amount);
   }
 
+  /// Normalize store name for comparison
+  /// Removes whitespace, special characters, and converts to lowercase
+  String _normalizeStoreName(String name) {
+    return name
+        .toLowerCase()
+        .replaceAll(RegExp(r'\s+'), '') // Remove all whitespace
+        .replaceAll(RegExp(r'[^\w가-힣]'), ''); // Keep only alphanumeric and Korean chars
+  }
+
   /// Find duplicate transaction by store name, date, and amount
   /// Returns the duplicate transaction if found, null otherwise
   Future<TransactionModel?> findDuplicateTransaction({
@@ -173,9 +182,11 @@ class TransactionRepository {
                        t.date.month == date.month &&
                        t.date.day == date.day;
       final sameAmount = (t.amount - amount).abs() < 1;
+      
+      // Compare normalized store names (ignoring whitespace and special chars)
       final sameStore = storeName != null && 
                         t.storeName != null &&
-                        t.storeName!.toLowerCase() == storeName.toLowerCase();
+                        _normalizeStoreName(t.storeName!) == _normalizeStoreName(storeName);
       
       // If store name is not available, check by date and exact amount only
       if (storeName == null || t.storeName == null) {
