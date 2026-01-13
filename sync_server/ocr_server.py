@@ -193,7 +193,7 @@ async def process_receipt_ocr(request: OCRRequest):
                 'total_price': item.get('total_price', 0),
             } for item in result.get('items', [])],
             raw_text=json.dumps(result, ensure_ascii=False), # 전체 JSON을 raw_text로 저장
-            category=None, # 카테고리는 클라이언트에서 추론하거나 LLM에 요청 가능
+            category=result.get('category', '기타'),  # SLLM이 자동 분류
             processing_time_ms=processing_time,
         )
         
@@ -235,7 +235,7 @@ async def process_receipt_upload(
             "total_amount": result.get('total_amount'),
             "items": result.get('items', []),
             "raw_text": json.dumps(result, ensure_ascii=False),
-            "category": None,
+            "category": result.get('category', '기타'),  # SLLM이 자동 분류
             "processing_time_ms": processing_time,
         }
         

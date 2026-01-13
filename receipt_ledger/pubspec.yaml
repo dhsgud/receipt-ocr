@@ -37,6 +37,12 @@ dependencies:
   # Utilities
   uuid: ^4.4.2
   intl: ^0.19.0
+  
+  # On-Device AI (0.2.x for vision support)
+  llama_cpp_dart: ^0.2.2
+  
+  # Path Provider (for model storage)
+  path_provider: ^2.1.2
 
 dev_dependencies:
   flutter_test:

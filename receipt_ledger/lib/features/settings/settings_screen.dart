@@ -6,6 +6,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 import '../../core/theme/app_theme.dart';
 import '../../shared/providers/app_providers.dart';
 import '../../shared/widgets/common_widgets.dart';
+import 'local_model_manager.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -451,6 +452,20 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   ),
                 ],
                 const SizedBox(height: 32),
+                
+                // OCR Model Section
+                const Text(
+                  'OCR 모델 설정 (실험실)',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.grey,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                _buildModelManagerCard(),
+                
+                const SizedBox(height: 32),
 
                 // App Info
                 const Text(
@@ -475,6 +490,223 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 ),
               ],
             ),
+    );
+  }
+
+  Widget _buildModelManagerCard() {
+    final modelState = ref.watch(localModelManagerProvider);
+    final manager = ref.read(localModelManagerProvider.notifier);
+    final ocrMode = ref.watch(ocrModeProvider);
+
+    // 상태 텍스트 결정
+    String statusText;
+    Color statusColor;
+    if (modelState.isModelLoaded) {
+      statusText = '로드됨 (사용 준비 완료)';
+      statusColor = AppColors.income;
+    } else if (modelState.isModelLoading) {
+      statusText = '모델 로딩 중...';
+      statusColor = AppColors.primary;
+    } else if (modelState.isModelReady) {
+      statusText = '다운로드됨 (로드 필요)';
+      statusColor = Colors.orange;
+    } else {
+      statusText = '다운로드 필요';
+      statusColor = Colors.grey;
+    }
+
+    return StyledCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // 모델 상태 헤더
+          Row(
+            children: [
+              const Icon(Icons.download_for_offline, color: AppColors.primary),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      '오프라인 OCR 모델 (2.5GB)',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      statusText,
+                      style: TextStyle(fontSize: 12, color: statusColor),
+                    ),
+                  ],
+                ),
+              ),
+              // 액션 버튼
+              if (modelState.isDownloading || modelState.isModelLoading)
+                const SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              else if (modelState.isModelLoaded)
+                IconButton(
+                  onPressed: manager.unloadModel,
+                  icon: const Icon(Icons.stop_circle, color: Colors.orange),
+                  tooltip: '모델 언로드',
+                )
+              else if (modelState.isModelReady)
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      onPressed: () => _loadModel(manager),
+                      icon: const Icon(Icons.play_circle, color: AppColors.income),
+                      tooltip: '모델 로드',
+                    ),
+                    IconButton(
+                      onPressed: () => _showDeleteModelDialog(manager),
+                      icon: const Icon(Icons.delete, color: AppColors.expense),
+                      tooltip: '모델 삭제',
+                    ),
+                  ],
+                )
+              else
+                IconButton(
+                  onPressed: manager.downloadModels,
+                  icon: const Icon(Icons.download, color: AppColors.primary),
+                  tooltip: '모델 다운로드',
+                ),
+            ],
+          ),
+          
+          // 다운로드 진행률
+          if (modelState.isDownloading) ...[
+            const SizedBox(height: 12),
+            LinearProgressIndicator(
+              value: modelState.progress,
+              backgroundColor: Colors.grey[200],
+              valueColor: const AlwaysStoppedAnimation<Color>(AppColors.primary),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '다운로드 중... ${(modelState.progress * 100).toStringAsFixed(1)}%',
+              style: const TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+          ],
+          
+          // 오류 메시지
+          if (modelState.error != null) ...[
+            const SizedBox(height: 12),
+            Text(
+              '오류: ${modelState.error}',
+              style: const TextStyle(fontSize: 12, color: AppColors.expense),
+            ),
+          ],
+          
+          // OCR 모드 선택 (모델이 다운로드된 경우에만 표시)
+          if (modelState.isModelReady || modelState.isModelLoaded) ...[
+            const SizedBox(height: 16),
+            const Divider(),
+            const SizedBox(height: 12),
+            const Text(
+              'OCR 모드',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+            ),
+            const SizedBox(height: 8),
+            SegmentedButton<OcrMode>(
+              segments: const [
+                ButtonSegment<OcrMode>(
+                  value: OcrMode.auto,
+                  label: Text('자동'),
+                  icon: Icon(Icons.auto_mode, size: 16),
+                ),
+                ButtonSegment<OcrMode>(
+                  value: OcrMode.local,
+                  label: Text('로컬'),
+                  icon: Icon(Icons.phone_android, size: 16),
+                ),
+                ButtonSegment<OcrMode>(
+                  value: OcrMode.server,
+                  label: Text('서버'),
+                  icon: Icon(Icons.cloud, size: 16),
+                ),
+              ],
+              selected: {ocrMode},
+              onSelectionChanged: (Set<OcrMode> selection) {
+                ref.read(ocrModeProvider.notifier).state = selection.first;
+              },
+            ),
+            const SizedBox(height: 8),
+            Text(
+              _getOcrModeDescription(ocrMode, modelState.isModelLoaded),
+              style: const TextStyle(fontSize: 11, color: Colors.grey),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  String _getOcrModeDescription(OcrMode mode, bool isModelLoaded) {
+    switch (mode) {
+      case OcrMode.auto:
+        return isModelLoaded 
+            ? '현재: 로컬 OCR 사용 중 (모델 로드됨)'
+            : '현재: 서버 OCR 사용 중 (모델 로드 필요)';
+      case OcrMode.local:
+        return isModelLoaded 
+            ? '로컬 OCR만 사용 (오프라인 가능)'
+            : '⚠️ 먼저 모델을 로드해주세요';
+      case OcrMode.server:
+        return '항상 서버 OCR 사용 (네트워크 필요)';
+    }
+  }
+
+  Future<void> _loadModel(LocalModelManager manager) async {
+    try {
+      await manager.loadModel();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('모델 로드 완료! 로컬 OCR을 사용할 수 있습니다.'),
+            backgroundColor: AppColors.income,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('모델 로드 실패: $e'),
+            backgroundColor: AppColors.expense,
+          ),
+        );
+      }
+    }
+  }
+
+  void _showDeleteModelDialog(LocalModelManager manager) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('모델 삭제'),
+        content: const Text('다운로드한 모델 파일을 삭제하시겠습니까?\n오프라인 OCR을 사용할 수 없게 됩니다.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('취소'),
+          ),
+          TextButton(
+            onPressed: () {
+              manager.deleteModels();
+              Navigator.pop(context);
+            },
+            child: const Text('삭제', style: TextStyle(color: AppColors.expense)),
+          ),
+        ],
+      ),
     );
   }
 

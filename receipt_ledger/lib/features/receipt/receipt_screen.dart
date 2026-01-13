@@ -1,5 +1,4 @@
 import 'dart:typed_data';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
@@ -10,6 +9,7 @@ import '../../data/models/category.dart';
 import '../../data/models/transaction.dart';
 import '../../data/models/receipt.dart';
 import '../../shared/providers/app_providers.dart';
+import '../settings/local_model_manager.dart';
 
 class ReceiptScreen extends ConsumerStatefulWidget {
   const ReceiptScreen({super.key});
@@ -77,8 +77,25 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
     });
 
     try {
-      final sllmService = ref.read(sllmServiceProvider);
-      final receiptData = await sllmService.parseReceiptFromBytes(_imageBytes!);
+      ReceiptData receiptData;
+      
+      // OCR 모드 및 모델 상태 확인
+      final ocrMode = ref.read(ocrModeProvider);
+      final modelState = ref.read(localModelManagerProvider);
+      final useLocalOcr = (ocrMode == OcrMode.local || ocrMode == OcrMode.auto) 
+          && modelState.isModelLoaded;
+
+      if (useLocalOcr) {
+        // 로컬 OCR 사용
+        debugPrint('[OCR] Using local OCR...');
+        final localOcrService = ref.read(localModelManagerProvider.notifier).localOcrService;
+        receiptData = await localOcrService.parseReceiptFromBytes(_imageBytes!);
+      } else {
+        // 서버 OCR 사용
+        debugPrint('[OCR] Using server OCR...');
+        final sllmService = ref.read(sllmServiceProvider);
+        receiptData = await sllmService.parseReceiptFromBytes(_imageBytes!);
+      }
 
       setState(() {
         _receiptData = receiptData;

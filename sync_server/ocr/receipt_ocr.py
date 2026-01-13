@@ -13,8 +13,8 @@ from PIL import Image, ImageFile
 # 손상된/불완전한 이미지 로드 허용
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
-# Llama.cpp 서버 설정 (사용자가 8888 포트에 띄움)
-LLAMA_SERVER_URL = "http://localhost:8888/v1/chat/completions"
+# Llama.cpp 서버 설정 (외부 서버)
+LLAMA_SERVER_URL = "http://183.96.3.137:408/v1/chat/completions"
 
 class ReceiptOCR:
     """Llama.cpp 기반 영수증 OCR 클라이언트"""
@@ -37,14 +37,35 @@ class ReceiptOCR:
             image.save(buffered, format="JPEG")
             img_str = base64.b64encode(buffered.getvalue()).decode('utf-8')
             
+            # 한국어 영수증 최적화 프롬프트
+            ocr_prompt = """이 영수증 이미지를 분석하여 아래 JSON 형식으로 정보를 추출하세요.
+
+필드 설명:
+- store_name: 상호명/가게 이름
+- date: 날짜 (YYYY-MM-DD 형식으로 변환)
+- total_amount: 총 결제 금액 (정수, 원 단위)
+- category: 지출 카테고리 (식비, 교통, 쇼핑, 의료, 생활, 문화, 기타 중 하나 선택)
+- items: 구매 품목 리스트
+
+카테고리 분류 기준:
+- 식비: 음식점, 카페, 편의점, 마트 식품
+- 교통: 주유소, 대중교통, 택시, 주차
+- 쇼핑: 의류, 전자제품, 생활용품
+- 의료: 병원, 약국
+- 생활: 공과금, 통신비
+- 문화: 영화, 공연, 도서
+- 기타: 위에 해당하지 않는 경우
+
+JSON만 반환하세요."""
+
             # Llama.cpp 서버 요청
             payload = {
-                "model": "user-model", # 모델명은 서버에 로드된 것을 따름 (alias 사용 권장)
+                "model": "user-model",
                 "messages": [
                     {
                         "role": "user",
                         "content": [
-                            {"type": "text", "text": "Extract valid JSON from this receipt. Fields: store_name, date (YYYY-MM-DD), total_amount (int), items (list of {name, quantity, unit_price, total_price})."},
+                            {"type": "text", "text": ocr_prompt},
                             {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_str}"}}
                         ]
                     }
@@ -57,6 +78,10 @@ class ReceiptOCR:
                         "store_name": {"type": "string"},
                         "date": {"type": "string"},
                         "total_amount": {"type": "integer"},
+                        "category": {
+                            "type": "string",
+                            "enum": ["식비", "교통", "쇼핑", "의료", "생활", "문화", "기타"]
+                        },
                         "items": {
                             "type": "array",
                             "items": {
@@ -69,7 +94,8 @@ class ReceiptOCR:
                                 }
                             }
                         }
-                    }
+                    },
+                    "required": ["store_name", "date", "total_amount", "category"]
                 }
             }
             

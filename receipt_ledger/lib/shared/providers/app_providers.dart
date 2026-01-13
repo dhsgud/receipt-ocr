@@ -110,3 +110,15 @@ enum SyncStatus {
   syncing,
   error,
 }
+
+/// OCR 모드 설정
+enum OcrMode {
+  server,  // 항상 서버 OCR 사용
+  local,   // 항상 로컬 OCR 사용 (모델 로드 필요)
+  auto,    // 로컬 모델이 로드되어 있으면 로컬, 아니면 서버
+}
+
+/// OCR 모드 provider (기본값: auto)
+final ocrModeProvider = StateProvider<OcrMode>((ref) {
+  return OcrMode.auto;
+});
