@@ -7,7 +7,7 @@ import 'features/calendar/calendar_screen.dart';
 import 'features/receipt/receipt_screen.dart';
 import 'features/statistics/statistics_screen.dart';
 import 'features/settings/settings_screen.dart';
-import 'data/services/sync_service.dart';
+
 
 class ReceiptLedgerApp extends ConsumerWidget {
   const ReceiptLedgerApp({super.key});

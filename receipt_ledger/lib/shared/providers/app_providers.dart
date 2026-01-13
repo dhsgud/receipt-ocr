@@ -113,12 +113,24 @@ enum SyncStatus {
 
 /// OCR 모드 설정
 enum OcrMode {
-  server,  // 항상 서버 OCR 사용
-  local,   // 항상 로컬 OCR 사용 (모델 로드 필요)
-  auto,    // 로컬 모델이 로드되어 있으면 로컬, 아니면 서버
+  externalLlama,  // 외부 llama.cpp 서버 (라즈베리파이 등)
+  server,         // 내부 OCR 서버 (Python FastAPI)
+  local,          // 로컬 디바이스 (on-device, 모델 로드 필요)
+  auto,           // 자동 선택 (로컬 > 외부 > 서버 순)
 }
 
 /// OCR 모드 provider (기본값: auto)
 final ocrModeProvider = StateProvider<OcrMode>((ref) {
   return OcrMode.auto;
 });
+
+/// 외부 llama.cpp 서버 URL (설정에서 변경 가능)
+final externalLlamaUrlProvider = StateProvider<String>((ref) {
+  return 'http://183.96.3.137:408';
+});
+
+/// 내부 OCR 서버 URL
+final ocrServerUrlProvider = StateProvider<String>((ref) {
+  return 'http://183.96.3.137:9999';
+});
+

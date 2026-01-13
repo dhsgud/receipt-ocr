@@ -79,22 +79,56 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
     try {
       ReceiptData receiptData;
       
-      // OCR 모드 및 모델 상태 확인
+      // OCR 모드 및 설정 읽기
       final ocrMode = ref.read(ocrModeProvider);
       final modelState = ref.read(localModelManagerProvider);
-      final useLocalOcr = (ocrMode == OcrMode.local || ocrMode == OcrMode.auto) 
-          && modelState.isModelLoaded;
+      final externalLlamaUrl = ref.read(externalLlamaUrlProvider);
+      final ocrServerUrl = ref.read(ocrServerUrlProvider);
 
-      if (useLocalOcr) {
+      // 모드 결정
+      String effectiveMode;
+      switch (ocrMode) {
+        case OcrMode.local:
+          if (modelState.isModelLoaded) {
+            effectiveMode = 'local';
+          } else {
+            throw Exception('로컬 모델이 로드되지 않았습니다. 설정에서 모델을 먼저 로드해주세요.');
+          }
+          break;
+        case OcrMode.externalLlama:
+          effectiveMode = 'externalLlama';
+          break;
+        case OcrMode.server:
+          effectiveMode = 'server';
+          break;
+        case OcrMode.auto:
+        default:
+          // 자동: 로컬 > 외부 llama > OCR 서버
+          if (modelState.isModelLoaded) {
+            effectiveMode = 'local';
+          } else {
+            effectiveMode = 'auto'; // 외부 시도 후 서버로 폴백
+          }
+          break;
+      }
+
+      debugPrint('[OCR] Mode: $ocrMode, Effective: $effectiveMode');
+
+      if (effectiveMode == 'local') {
         // 로컬 OCR 사용
         debugPrint('[OCR] Using local OCR...');
         final localOcrService = ref.read(localModelManagerProvider.notifier).localOcrService;
         receiptData = await localOcrService.parseReceiptFromBytes(_imageBytes!);
       } else {
-        // 서버 OCR 사용
-        debugPrint('[OCR] Using server OCR...');
+        // 서버 OCR 사용 (externalLlama, server, auto)
+        debugPrint('[OCR] Using server OCR ($effectiveMode)...');
         final sllmService = ref.read(sllmServiceProvider);
-        receiptData = await sllmService.parseReceiptFromBytes(_imageBytes!);
+        receiptData = await sllmService.parseReceiptFromBytes(
+          _imageBytes!,
+          mode: effectiveMode,
+          externalLlamaUrl: externalLlamaUrl,
+          ocrServerUrl: ocrServerUrl,
+        );
       }
 
       setState(() {

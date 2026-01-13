@@ -605,45 +605,53 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ),
           ],
           
-          // OCR 모드 선택 (모델이 다운로드된 경우에만 표시)
-          if (modelState.isModelReady || modelState.isModelLoaded) ...[
-            const SizedBox(height: 16),
-            const Divider(),
-            const SizedBox(height: 12),
-            const Text(
-              'OCR 모드',
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-            ),
-            const SizedBox(height: 8),
-            SegmentedButton<OcrMode>(
-              segments: const [
-                ButtonSegment<OcrMode>(
-                  value: OcrMode.auto,
-                  label: Text('자동'),
-                  icon: Icon(Icons.auto_mode, size: 16),
+          // OCR 모드 선택 (항상 표시)
+          const SizedBox(height: 16),
+          const Divider(),
+          const SizedBox(height: 12),
+          const Text(
+            'OCR 모드',
+            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+          ),
+          const SizedBox(height: 8),
+          Column(
+            children: [
+              _buildOcrModeRadio(
+                ocrMode, 
+                OcrMode.auto, 
+                '자동', 
+                Icons.auto_mode,
+                '로컬 > 외부 서버 > OCR 서버 순',
+              ),
+              _buildOcrModeRadio(
+                ocrMode, 
+                OcrMode.externalLlama, 
+                '외부 llama.cpp', 
+                Icons.dns,
+                '라즈베리파이 등 외부 서버',
+              ),
+              _buildOcrModeRadio(
+                ocrMode, 
+                OcrMode.server, 
+                'OCR 서버', 
+                Icons.cloud,
+                'Python FastAPI OCR',
+              ),
+              if (!kIsWeb)
+                _buildOcrModeRadio(
+                  ocrMode, 
+                  OcrMode.local, 
+                  '로컬 디바이스', 
+                  Icons.phone_android,
+                  '오프라인 (모델 로드 필요)',
                 ),
-                ButtonSegment<OcrMode>(
-                  value: OcrMode.local,
-                  label: Text('로컬'),
-                  icon: Icon(Icons.phone_android, size: 16),
-                ),
-                ButtonSegment<OcrMode>(
-                  value: OcrMode.server,
-                  label: Text('서버'),
-                  icon: Icon(Icons.cloud, size: 16),
-                ),
-              ],
-              selected: {ocrMode},
-              onSelectionChanged: (Set<OcrMode> selection) {
-                ref.read(ocrModeProvider.notifier).state = selection.first;
-              },
-            ),
-            const SizedBox(height: 8),
-            Text(
-              _getOcrModeDescription(ocrMode, modelState.isModelLoaded),
-              style: const TextStyle(fontSize: 11, color: Colors.grey),
-            ),
-          ],
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            _getOcrModeDescription(ocrMode, modelState.isModelLoaded),
+            style: const TextStyle(fontSize: 11, color: Colors.grey),
+          ),
         ],
       ),
     );
@@ -653,15 +661,50 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     switch (mode) {
       case OcrMode.auto:
         return isModelLoaded 
-            ? '현재: 로컬 OCR 사용 중 (모델 로드됨)'
-            : '현재: 서버 OCR 사용 중 (모델 로드 필요)';
+            ? '현재: 로컬 OCR 사용 중'
+            : '현재: 외부 서버 또는 OCR 서버 사용';
+      case OcrMode.externalLlama:
+        final url = ref.read(externalLlamaUrlProvider);
+        return '외부 llama.cpp 서버: $url';
+      case OcrMode.server:
+        final url = ref.read(ocrServerUrlProvider);
+        return 'OCR 서버: $url';
       case OcrMode.local:
         return isModelLoaded 
-            ? '로컬 OCR만 사용 (오프라인 가능)'
+            ? '로컬 OCR 사용 중 (오프라인 가능)'
             : '⚠️ 먼저 모델을 로드해주세요';
-      case OcrMode.server:
-        return '항상 서버 OCR 사용 (네트워크 필요)';
     }
+  }
+
+  Widget _buildOcrModeRadio(
+    OcrMode currentMode,
+    OcrMode value,
+    String label,
+    IconData icon,
+    String description,
+  ) {
+    return RadioListTile<OcrMode>(
+      value: value,
+      groupValue: currentMode,
+      onChanged: (OcrMode? newValue) {
+        if (newValue != null) {
+          ref.read(ocrModeProvider.notifier).state = newValue;
+        }
+      },
+      title: Row(
+        children: [
+          Icon(icon, size: 20),
+          const SizedBox(width: 8),
+          Text(label, style: const TextStyle(fontSize: 14)),
+        ],
+      ),
+      subtitle: Text(
+        description,
+        style: const TextStyle(fontSize: 11, color: Colors.grey),
+      ),
+      dense: true,
+      contentPadding: EdgeInsets.zero,
+    );
   }
 
   Future<void> _loadModel(LocalModelManager manager) async {
