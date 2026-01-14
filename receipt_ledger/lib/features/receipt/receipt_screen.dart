@@ -11,6 +11,58 @@ import '../../data/models/receipt.dart';
 import '../../shared/providers/app_providers.dart';
 import '../settings/local_model_manager.dart';
 
+/// 일괄 처리용 영수증 아이템
+class BatchReceiptItem {
+  final XFile file;
+  final Uint8List bytes;
+  bool isProcessing;
+  bool isProcessed;
+  ReceiptData? receiptData;
+  String? errorMessage;
+  
+  // 폼 데이터 (수정 가능)
+  String description;
+  String amount;
+  DateTime date;
+  String category;
+  bool isIncome;
+  bool isSelected; // 저장 대상 여부
+
+  BatchReceiptItem({
+    required this.file,
+    required this.bytes,
+    this.isProcessing = false,
+    this.isProcessed = false,
+    this.receiptData,
+    this.errorMessage,
+    this.description = '',
+    this.amount = '',
+    DateTime? date,
+    this.category = '기타',
+    this.isIncome = false,
+    this.isSelected = true,
+  }) : date = date ?? DateTime.now();
+
+  /// OCR 결과로 폼 데이터 업데이트
+  void updateFromReceiptData(ReceiptData data, String Function(String) guessCategory) {
+    receiptData = data;
+    if (data.storeName != null) {
+      description = data.storeName!;
+    }
+    if (data.totalAmount != null) {
+      amount = data.totalAmount!.toStringAsFixed(0);
+    }
+    if (data.date != null) {
+      date = data.date!;
+    }
+    if (data.category != null && data.category!.isNotEmpty) {
+      category = data.category!;
+    } else {
+      category = guessCategory(data.storeName ?? '');
+    }
+  }
+}
+
 class ReceiptScreen extends ConsumerStatefulWidget {
   const ReceiptScreen({super.key});
 
@@ -19,12 +71,18 @@ class ReceiptScreen extends ConsumerStatefulWidget {
 }
 
 class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
+  // 단일 처리 모드
   XFile? _pickedFile;
   Uint8List? _imageBytes;
   bool _isProcessing = false;
   ReceiptData? _receiptData;
   String? _errorMessage;
   bool _showDebugInfo = true; // 디버그 모드 ON/OFF
+
+  // 일괄 처리 모드
+  List<BatchReceiptItem> _batchItems = [];
+  bool _isBatchMode = false;
+  bool _isBatchProcessing = false;
 
   // Form controllers
   final _descriptionController = TextEditingController();
@@ -177,6 +235,236 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
     return '기타';
   }
 
+  /// 다중 이미지 선택 (갤러리에서)
+  Future<void> _pickMultipleImages() async {
+    try {
+      final picker = ImagePicker();
+      final pickedFiles = await picker.pickMultiImage(
+        maxWidth: 1920,
+        maxHeight: 1920,
+        imageQuality: 85,
+      );
+
+      if (pickedFiles.isNotEmpty) {
+        // 일괄 모드로 전환
+        final items = <BatchReceiptItem>[];
+        for (final file in pickedFiles) {
+          final bytes = await file.readAsBytes();
+          items.add(BatchReceiptItem(file: file, bytes: bytes));
+        }
+
+        setState(() {
+          _batchItems = items;
+          _isBatchMode = true;
+          _errorMessage = null;
+        });
+
+        // 일괄 OCR 처리 시작
+        await _processBatchReceipts();
+      }
+    } catch (e) {
+      setState(() {
+        _errorMessage = '이미지를 불러올 수 없습니다: $e';
+      });
+    }
+  }
+
+  /// 일괄 OCR 처리 (병렬)
+  Future<void> _processBatchReceipts() async {
+    if (_batchItems.isEmpty) return;
+
+    setState(() {
+      _isBatchProcessing = true;
+    });
+
+    // OCR 설정 읽기
+    final ocrMode = ref.read(ocrModeProvider);
+    final modelState = ref.read(localModelManagerProvider);
+    final externalLlamaUrl = ref.read(externalLlamaUrlProvider);
+    final ocrServerUrl = ref.read(ocrServerUrlProvider);
+
+    // 모드 결정
+    String effectiveMode;
+    switch (ocrMode) {
+      case OcrMode.local:
+        if (modelState.isModelLoaded) {
+          effectiveMode = 'local';
+        } else {
+          setState(() {
+            _isBatchProcessing = false;
+            _errorMessage = '로컬 모델이 로드되지 않았습니다.';
+          });
+          return;
+        }
+        break;
+      case OcrMode.externalLlama:
+        effectiveMode = 'externalLlama';
+        break;
+      case OcrMode.server:
+        effectiveMode = 'server';
+        break;
+      case OcrMode.auto:
+      default:
+        if (modelState.isModelLoaded) {
+          effectiveMode = 'local';
+        } else {
+          effectiveMode = 'auto';
+        }
+        break;
+    }
+
+    // 모든 아이템을 처리 중 상태로 변경
+    setState(() {
+      for (var item in _batchItems) {
+        item.isProcessing = true;
+      }
+    });
+
+    // 병렬로 모든 영수증 처리
+    await Future.wait(
+      _batchItems.asMap().entries.map((entry) async {
+        final index = entry.key;
+        final item = entry.value;
+
+        if (!mounted) return;
+
+        try {
+          ReceiptData receiptData;
+
+          if (effectiveMode == 'local') {
+            final localOcrService = ref.read(localModelManagerProvider.notifier).localOcrService;
+            receiptData = await localOcrService.parseReceiptFromBytes(item.bytes);
+          } else {
+            final sllmService = ref.read(sllmServiceProvider);
+            receiptData = await sllmService.parseReceiptFromBytes(
+              item.bytes,
+              mode: effectiveMode,
+              externalLlamaUrl: externalLlamaUrl,
+              ocrServerUrl: ocrServerUrl,
+            );
+          }
+
+          if (mounted) {
+            setState(() {
+              _batchItems[index].isProcessing = false;
+              _batchItems[index].isProcessed = true;
+              _batchItems[index].updateFromReceiptData(receiptData, _guessCategory);
+            });
+          }
+        } catch (e) {
+          if (mounted) {
+            setState(() {
+              _batchItems[index].isProcessing = false;
+              _batchItems[index].isProcessed = true;
+              _batchItems[index].errorMessage = e.toString();
+            });
+          }
+        }
+      }),
+    );
+
+    if (mounted) {
+      setState(() {
+        _isBatchProcessing = false;
+      });
+    }
+  }
+
+  /// 일괄 저장
+  Future<void> _saveBatchTransactions() async {
+    final syncService = ref.read(syncServiceProvider);
+    final repository = ref.read(transactionRepositoryProvider);
+
+    final selectedItems = _batchItems.where((item) => 
+      item.isSelected && 
+      item.isProcessed && 
+      item.errorMessage == null
+    ).toList();
+
+    if (selectedItems.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('저장할 영수증이 없습니다')),
+        );
+      }
+      return;
+    }
+
+    int savedCount = 0;
+    int skippedCount = 0;
+
+    for (final item in selectedItems) {
+      final amount = double.tryParse(item.amount);
+      if (amount == null || amount <= 0) {
+        skippedCount++;
+        continue;
+      }
+
+      if (item.description.isEmpty) {
+        skippedCount++;
+        continue;
+      }
+
+      // 중복 체크 (일괄 처리에서는 다이얼로그 없이 스킵)
+      final duplicate = await repository.findDuplicateTransaction(
+        storeName: item.receiptData?.storeName,
+        date: item.date,
+        amount: amount,
+      );
+
+      if (duplicate != null) {
+        skippedCount++;
+        continue;
+      }
+
+      final transaction = TransactionModel(
+        id: const Uuid().v4(),
+        date: item.date,
+        category: item.category,
+        amount: amount,
+        description: item.description,
+        receiptImagePath: item.file.path,
+        storeName: item.receiptData?.storeName,
+        isIncome: item.isIncome,
+        ownerKey: syncService.myKey,
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      );
+
+      await repository.insertTransaction(transaction);
+      savedCount++;
+    }
+
+    // Refresh providers
+    ref.invalidate(transactionsProvider);
+    ref.invalidate(selectedDateTransactionsProvider);
+    ref.invalidate(monthlyTransactionsProvider);
+    ref.invalidate(monthlyStatsProvider);
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('$savedCount건 저장 완료${skippedCount > 0 ? ' ($skippedCount건 스킵)' : ''}'),
+          backgroundColor: AppColors.income,
+        ),
+      );
+
+      // 일괄 모드 종료
+      setState(() {
+        _batchItems.clear();
+        _isBatchMode = false;
+      });
+    }
+  }
+
+  /// 일괄 모드 취소
+  void _cancelBatchMode() {
+    setState(() {
+      _batchItems.clear();
+      _isBatchMode = false;
+      _isBatchProcessing = false;
+    });
+  }
   Future<void> _saveTransaction() async {
     final amount = double.tryParse(_amountController.text);
     if (amount == null || amount <= 0) {
@@ -309,6 +597,11 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // 일괄 처리 모드일 때는 별도 UI 표시
+    if (_isBatchMode) {
+      return _buildBatchModeUI();
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('영수증 등록'),
@@ -474,22 +767,408 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
     );
   }
 
-  Widget _buildImagePickerButtons() {
-    return Row(
-      children: [
-        Expanded(
-          child: _buildPickerButton(
-            icon: Icons.camera_alt,
-            label: '카메라',
-            onTap: () => _pickImage(ImageSource.camera),
-          ),
+  /// 일괄 처리 모드 UI
+  Widget _buildBatchModeUI() {
+    final processedCount = _batchItems.where((item) => item.isProcessed).length;
+    final totalCount = _batchItems.length;
+    final selectedCount = _batchItems.where((item) => item.isSelected && item.isProcessed && item.errorMessage == null).length;
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('일괄 등록 ($totalCount장)'),
+        leading: IconButton(
+          icon: const Icon(Icons.close),
+          onPressed: _cancelBatchMode,
         ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: _buildPickerButton(
-            icon: Icons.photo_library,
-            label: '갤러리',
-            onTap: () => _pickImage(ImageSource.gallery),
+        actions: [
+          if (!_isBatchProcessing && processedCount > 0)
+            TextButton.icon(
+              onPressed: selectedCount > 0 ? _saveBatchTransactions : null,
+              icon: const Icon(Icons.save, size: 18),
+              label: Text('저장 ($selectedCount건)'),
+              style: TextButton.styleFrom(
+                foregroundColor: selectedCount > 0 ? AppColors.primary : Colors.grey,
+              ),
+            ),
+        ],
+      ),
+      body: Column(
+        children: [
+          // 진행 상태 표시
+          if (_isBatchProcessing)
+            Container(
+              padding: const EdgeInsets.all(16),
+              color: AppColors.primary.withAlpha(25),
+              child: Row(
+                children: [
+                  const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
+                  ),
+                  const SizedBox(width: 12),
+                  Text('분석 중... ($processedCount / $totalCount)'),
+                  const Spacer(),
+                  LinearProgressIndicator(
+                    value: totalCount > 0 ? processedCount / totalCount : 0,
+                    backgroundColor: Colors.grey.withAlpha(50),
+                    valueColor: const AlwaysStoppedAnimation(AppColors.primary),
+                  ),
+                ],
+              ),
+            )
+          else if (processedCount == totalCount)
+            Container(
+              padding: const EdgeInsets.all(12),
+              color: AppColors.income.withAlpha(25),
+              child: Row(
+                children: [
+                  const Icon(Icons.check_circle, color: AppColors.income, size: 20),
+                  const SizedBox(width: 8),
+                  Text('$totalCount장 분석 완료! 저장할 항목을 선택하세요.'),
+                ],
+              ),
+            ),
+
+          // 일괄 선택/해제 버튼
+          if (!_isBatchProcessing && processedCount > 0)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Row(
+                children: [
+                  TextButton.icon(
+                    onPressed: () {
+                      setState(() {
+                        for (var item in _batchItems) {
+                          if (item.isProcessed && item.errorMessage == null) {
+                            item.isSelected = true;
+                          }
+                        }
+                      });
+                    },
+                    icon: const Icon(Icons.select_all, size: 18),
+                    label: const Text('전체 선택'),
+                  ),
+                  const SizedBox(width: 8),
+                  TextButton.icon(
+                    onPressed: () {
+                      setState(() {
+                        for (var item in _batchItems) {
+                          item.isSelected = false;
+                        }
+                      });
+                    },
+                    icon: const Icon(Icons.deselect, size: 18),
+                    label: const Text('전체 해제'),
+                  ),
+                ],
+              ),
+            ),
+
+          // 영수증 리스트
+          Expanded(
+            child: ListView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: _batchItems.length,
+              itemBuilder: (context, index) => _buildBatchItemCard(index),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 개별 일괄 처리 아이템 카드
+  Widget _buildBatchItemCard(int index) {
+    final item = _batchItems[index];
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(
+          color: item.isSelected && item.errorMessage == null
+              ? AppColors.primary.withAlpha(100)
+              : Colors.transparent,
+          width: 2,
+        ),
+      ),
+      child: Column(
+        children: [
+          // 헤더 (이미지 썸네일 + 상태)
+          InkWell(
+            onTap: item.isProcessed && item.errorMessage == null
+                ? () => setState(() => item.isSelected = !item.isSelected)
+                : null,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Row(
+                children: [
+                  // 썸네일 이미지
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Image.memory(
+                      item.bytes,
+                      width: 60,
+                      height: 60,
+                      fit: BoxFit.cover,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+
+                  // 상태 및 정보
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '영수증 ${index + 1}',
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 4),
+                        if (item.isProcessing)
+                          const Row(
+                            children: [
+                              SizedBox(
+                                width: 14,
+                                height: 14,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              ),
+                              SizedBox(width: 8),
+                              Text('분석 중...', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                            ],
+                          )
+                        else if (item.errorMessage != null)
+                          Row(
+                            children: [
+                              const Icon(Icons.error, color: AppColors.expense, size: 14),
+                              const SizedBox(width: 4),
+                              Expanded(
+                                child: Text(
+                                  item.errorMessage!,
+                                  style: const TextStyle(color: AppColors.expense, fontSize: 12),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          )
+                        else if (item.isProcessed)
+                          Row(
+                            children: [
+                              const Icon(Icons.check_circle, color: AppColors.income, size: 14),
+                              const SizedBox(width: 4),
+                              Text(
+                                item.description.isNotEmpty ? item.description : '(상점명 없음)',
+                                style: const TextStyle(fontSize: 12),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                '₩${item.amount.isNotEmpty ? item.amount : "0"}',
+                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                              ),
+                            ],
+                          )
+                        else
+                          const Text('대기 중...', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                      ],
+                    ),
+                  ),
+
+                  // 체크박스 (처리 완료 시)
+                  if (item.isProcessed && item.errorMessage == null)
+                    Checkbox(
+                      value: item.isSelected,
+                      onChanged: (value) => setState(() => item.isSelected = value ?? false),
+                      activeColor: AppColors.primary,
+                    ),
+                ],
+              ),
+            ),
+          ),
+
+          // 편집 가능한 폼 (선택된 항목만)
+          if (item.isProcessed && item.errorMessage == null && item.isSelected)
+            Container(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+              child: Column(
+                children: [
+                  const Divider(),
+                  const SizedBox(height: 8),
+                  // 설명 (상점명)
+                  TextField(
+                    controller: TextEditingController(text: item.description)..selection = TextSelection.collapsed(offset: item.description.length),
+                    onChanged: (value) => item.description = value,
+                    decoration: InputDecoration(
+                      labelText: '설명',
+                      isDense: true,
+                      filled: true,
+                      fillColor: Theme.of(context).cardTheme.color,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      // 금액
+                      Expanded(
+                        child: TextField(
+                          controller: TextEditingController(text: item.amount)..selection = TextSelection.collapsed(offset: item.amount.length),
+                          onChanged: (value) => item.amount = value,
+                          keyboardType: TextInputType.number,
+                          decoration: InputDecoration(
+                            labelText: '금액',
+                            prefixText: '₩ ',
+                            isDense: true,
+                            filled: true,
+                            fillColor: Theme.of(context).cardTheme.color,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: BorderSide.none,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      // 카테고리 드롭다운
+                      Expanded(
+                        child: DropdownButtonFormField<String>(
+                          value: Category.defaultCategories.any((c) => c.name == item.category)
+                              ? item.category
+                              : '기타',
+                          decoration: InputDecoration(
+                            labelText: '카테고리',
+                            isDense: true,
+                            filled: true,
+                            fillColor: Theme.of(context).cardTheme.color,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: BorderSide.none,
+                            ),
+                          ),
+                          items: Category.defaultCategories
+                              .where((c) => c.name != '수입')
+                              .map((c) => DropdownMenuItem(
+                                    value: c.name,
+                                    child: Text('${c.emoji} ${c.name}', style: const TextStyle(fontSize: 12)),
+                                  ))
+                              .toList(),
+                          onChanged: (value) => setState(() => item.category = value ?? '기타'),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  // 날짜 선택
+                  InkWell(
+                    onTap: () async {
+                      final date = await showDatePicker(
+                        context: context,
+                        initialDate: item.date,
+                        firstDate: DateTime(2020),
+                        lastDate: DateTime.now().add(const Duration(days: 1)),
+                      );
+                      if (date != null) {
+                        setState(() => item.date = date);
+                      }
+                    },
+                    borderRadius: BorderRadius.circular(8),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).cardTheme.color,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.calendar_today, size: 16, color: AppColors.primary),
+                          const SizedBox(width: 8),
+                          Text(
+                            Formatters.dateKorean(item.date),
+                            style: const TextStyle(fontSize: 14),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildImagePickerButtons() {
+    return Column(
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: _buildPickerButton(
+                icon: Icons.camera_alt,
+                label: '카메라',
+                onTap: () => _pickImage(ImageSource.camera),
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: _buildPickerButton(
+                icon: Icons.photo_library,
+                label: '갤러리',
+                onTap: () => _pickImage(ImageSource.gallery),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        // 여러 장 선택 버튼
+        InkWell(
+          onTap: _pickMultipleImages,
+          borderRadius: BorderRadius.circular(16),
+          child: Container(
+            height: 80,
+            decoration: BoxDecoration(
+              color: AppColors.primary.withAlpha(25),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: AppColors.primary.withAlpha(100),
+                width: 2,
+                strokeAlign: BorderSide.strokeAlignInside,
+              ),
+            ),
+            child: const Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.photo_library_outlined, size: 32, color: AppColors.primary),
+                SizedBox(width: 12),
+                Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '여러 장 선택',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.primary,
+                      ),
+                    ),
+                    Text(
+                      '갤러리에서 여러 영수증을 한번에 등록',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
       ],
