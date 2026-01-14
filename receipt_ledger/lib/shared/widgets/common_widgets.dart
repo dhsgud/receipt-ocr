@@ -42,6 +42,7 @@ class TransactionListItem extends StatelessWidget {
   final String amount;
   final bool isIncome;
   final VoidCallback? onTap;
+  final VoidCallback? onLongPress;
 
   const TransactionListItem({
     super.key,
@@ -51,12 +52,14 @@ class TransactionListItem extends StatelessWidget {
     required this.amount,
     this.isIncome = false,
     this.onTap,
+    this.onLongPress,
   });
 
   @override
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
+      onLongPress: onLongPress,
       borderRadius: BorderRadius.circular(12),
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
