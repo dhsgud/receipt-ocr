@@ -144,3 +144,10 @@ final calendarSyncEnabledProvider = StateProvider<bool>((ref) => false);
 /// 선택된 캘린더 ID
 final selectedCalendarIdProvider = StateProvider<String?>((ref) => null);
 
+// ============================================================================
+// 알림 모니터링 관련 Providers
+// ============================================================================
+
+/// 알림 모니터링 활성화 여부 (StateProvider로 UI 상태 관리)
+final notificationMonitorEnabledProvider = StateProvider<bool>((ref) => false);
+

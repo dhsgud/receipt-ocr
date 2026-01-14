@@ -1,7 +1,10 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/theme/app_theme.dart';
 import 'shared/providers/app_providers.dart';
+import 'data/repositories/transaction_repository.dart';
+import 'data/services/notification_monitor_service.dart';
 import 'features/home/home_screen.dart';
 import 'features/calendar/calendar_screen.dart';
 import 'features/receipt/receipt_screen.dart';
@@ -37,6 +40,7 @@ class MainNavigationScreen extends ConsumerStatefulWidget {
 class _MainNavigationScreenState extends ConsumerState<MainNavigationScreen> {
   int _currentIndex = 0;
   bool _isSyncing = false;
+  NotificationMonitorService? _notificationService;
 
   final List<Widget> _screens = [
     const HomeScreen(),
@@ -52,7 +56,52 @@ class _MainNavigationScreenState extends ConsumerState<MainNavigationScreen> {
     // Auto-sync on app start
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _performAutoSync();
+      _initNotificationMonitoring();
     });
+  }
+  
+  @override
+  void dispose() {
+    _notificationService?.dispose();
+    super.dispose();
+  }
+
+  /// Initialize notification monitoring if enabled
+  Future<void> _initNotificationMonitoring() async {
+    // Only available on mobile
+    if (kIsWeb) return;
+    
+    final repository = ref.read(transactionRepositoryProvider);
+    _notificationService = NotificationMonitorService(repository);
+    
+    // Set callback to refresh data when new transaction is registered
+    _notificationService!.onTransactionRegistered = () {
+      ref.invalidate(transactionsProvider);
+      ref.invalidate(selectedDateTransactionsProvider);
+      ref.invalidate(monthlyTransactionsProvider);
+      ref.invalidate(monthlyStatsProvider);
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('💳 결제 알림에서 자동 등록되었습니다'),
+            backgroundColor: AppColors.income,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    };
+    
+    // Check if monitoring was enabled previously
+    final isEnabled = await _notificationService!.isEnabled();
+    if (isEnabled) {
+      final hasPermission = await _notificationService!.isPermissionGranted();
+      if (hasPermission) {
+        await _notificationService!.startMonitoring();
+        ref.read(notificationMonitorEnabledProvider.notifier).state = true;
+        debugPrint('[App] Notification monitoring started');
+      }
+    }
   }
 
   Future<void> _performAutoSync() async {

@@ -46,6 +46,9 @@ dependencies:
   
   # Calendar Integration
   device_calendar: ^4.3.0
+  
+  # Notification Listener (for payment notifications)
+  notification_listener_service: ^0.3.5
 
 dev_dependencies:
   flutter_test:
