@@ -1,53 +1,135 @@
 """
-Receipt OCR Module using Llama.cpp Server
-Nanonets-OCR2-3B-GGUF 모델을 사용하는 로컬 Llama.cpp 서버와 통신
+Receipt OCR Module using Two-Stage Pipeline
+1. OCR Stage: Vision 모델로 이미지에서 텍스트 추출
+2. Structuring Stage: LLM 모델로 텍스트를 JSON 구조화
+
+llama.cpp 서버와 통신
 """
 
 import io
 import json
 import base64
 import requests
-from typing import List, Tuple, Optional, Any, Dict
+from typing import Optional, Any, Dict
 from PIL import Image, ImageFile
 
 # 손상된/불완전한 이미지 로드 허용
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
-# Llama.cpp 서버 설정 (외부 서버)
-LLAMA_SERVER_URL = "http://183.96.3.137:408/v1/chat/completions"
+# ============== 서버 설정 ==============
+# 1단계: Vision/OCR 모델 (이미지 -> 텍스트)
+OCR_SERVER_URL = "http://183.96.3.137:409/v1/chat/completions"
+OCR_MODEL_NAME = "user-model"
+
+# 2단계: LLM 모델 (텍스트 -> JSON)
+# 같은 서버를 사용하거나 다른 서버(1.2B 모델)로 변경 가능
+LLM_SERVER_URL = "http://183.96.3.137:408/v1/chat/completions"
+LLM_MODEL_NAME = "user-model"
+
+# 타임아웃 설정 (초)
+REQUEST_TIMEOUT = 300
+
 
 class ReceiptOCR:
-    """Llama.cpp 기반 영수증 OCR 클라이언트"""
+    """2단계 OCR 파이프라인 클라이언트"""
     
     def __init__(self, use_gpu: bool = False, lang: str = 'korean'):
-        """
-        초기화
-        """
+        """초기화"""
         self.lang = lang
         
-    def process_image(self, image_data: bytes) -> Dict[str, Any]:
+    def extract_text(self, image_data: bytes) -> str:
         """
-        이미지에서 텍스트 추출 및 구조화된 데이터 반환
+        1단계: 이미지에서 텍스트만 추출 (있는 그대로)
+        
+        Args:
+            image_data: 이미지 바이트 데이터
+            
+        Returns:
+            추출된 원시 텍스트
         """
         try:
-            # 이미지 로드 및 검증 (PIL 사용)
+            # 이미지 로드 및 검증
             image = Image.open(io.BytesIO(image_data))
-            # 다시 바이트로 변환 (검증된 이미지)
             buffered = io.BytesIO()
             image.save(buffered, format="JPEG")
             img_str = base64.b64encode(buffered.getvalue()).decode('utf-8')
             
-            # 한국어 영수증 최적화 프롬프트
-            ocr_prompt = """이 영수증 이미지를 분석하여 아래 JSON 형식으로 정보를 추출하세요.
+            # 텍스트 추출 전용 프롬프트 (JSON 형식 강요 안 함)
+            extraction_prompt = """이 영수증 이미지에 보이는 모든 텍스트를 순서대로 그대로 적어주세요.
+- 위에서 아래로, 왼쪽에서 오른쪽 순서로 읽어주세요.
+- 숫자, 가격, 날짜 등 모든 정보를 빠뜨리지 말고 적어주세요.
+- 형식을 맞추려 하지 말고 보이는 그대로 적어주세요.
+- 줄바꿈은 보이는 대로 유지해주세요."""
 
-필드 설명:
-- store_name: 상호명/가게 이름
-- date: 날짜 (YYYY-MM-DD 형식으로 변환)
-- total_amount: 총 결제 금액 (정수, 원 단위)
-- category: 지출 카테고리 (식비, 교통, 쇼핑, 의료, 생활, 문화, 기타 중 하나 선택)
-- items: 구매 품목 리스트
+            payload = {
+                "model": OCR_MODEL_NAME,
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": extraction_prompt},
+                            {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_str}"}}
+                        ]
+                    }
+                ],
+                "temperature": 0.1,
+                "max_tokens": 2048,
+            }
+            
+            print(f"[OCR 1단계] Vision 모델에 요청 중...")
+            response = requests.post(OCR_SERVER_URL, json=payload, timeout=REQUEST_TIMEOUT)
+            
+            if response.status_code != 200:
+                raise RuntimeError(f"OCR 서버 오류: {response.text}")
+                
+            result = response.json()
+            raw_text = result['choices'][0]['message']['content']
+            
+            print(f"[OCR 1단계] 추출된 텍스트 ({len(raw_text)}자):")
+            print("-" * 40)
+            print(raw_text[:500] + "..." if len(raw_text) > 500 else raw_text)
+            print("-" * 40)
+            
+            return raw_text
+            
+        except Exception as e:
+            print(f"[OCR 1단계 오류] {str(e)}")
+            raise RuntimeError(f"텍스트 추출 실패: {str(e)}")
+    
+    def structure_text(self, raw_text: str) -> Dict[str, Any]:
+        """
+        2단계: 추출된 텍스트를 JSON 구조로 변환
+        
+        Args:
+            raw_text: 1단계에서 추출된 원시 텍스트
+            
+        Returns:
+            구조화된 영수증 데이터 딕셔너리
+        """
+        try:
+            # 텍스트 검증 (숫자가 있는지 확인)
+            if not any(c.isdigit() for c in raw_text):
+                print("[OCR 2단계] 경고: 텍스트에 숫자가 없습니다.")
+            
+            # 구조화 프롬프트
+            structuring_prompt = f"""아래는 영수증에서 추출한 텍스트입니다. 이 정보를 분석하여 JSON 형식으로 정리해주세요.
 
-카테고리 분류 기준:
+=== 영수증 텍스트 ===
+{raw_text}
+=== 끝 ===
+
+다음 JSON 형식으로 응답해주세요:
+{{
+    "store_name": "상호명",
+    "date": "YYYY-MM-DD",
+    "total_amount": 결제금액(정수),
+    "category": "카테고리",
+    "items": [
+        {{"name": "품목명", "quantity": 수량, "unit_price": 단가, "total_price": 금액}}
+    ]
+}}
+
+카테고리는 다음 중 하나로 선택:
 - 식비: 음식점, 카페, 편의점, 마트 식품
 - 교통: 주유소, 대중교통, 택시, 주차
 - 쇼핑: 의류, 전자제품, 생활용품
@@ -56,18 +138,14 @@ class ReceiptOCR:
 - 문화: 영화, 공연, 도서
 - 기타: 위에 해당하지 않는 경우
 
-JSON만 반환하세요."""
+JSON만 응답해주세요."""
 
-            # Llama.cpp 서버 요청
             payload = {
-                "model": "user-model",
+                "model": LLM_MODEL_NAME,
                 "messages": [
                     {
                         "role": "user",
-                        "content": [
-                            {"type": "text", "text": ocr_prompt},
-                            {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_str}"}}
-                        ]
+                        "content": structuring_prompt
                     }
                 ],
                 "temperature": 0.1,
@@ -99,18 +177,18 @@ JSON만 반환하세요."""
                 }
             }
             
-            print(f"[OCR] Sending request to Llama.cpp server...")
-            response = requests.post(LLAMA_SERVER_URL, json=payload, timeout=300)
+            print(f"[OCR 2단계] LLM 모델에 구조화 요청 중...")
+            response = requests.post(LLM_SERVER_URL, json=payload, timeout=REQUEST_TIMEOUT)
             
             if response.status_code != 200:
-                raise RuntimeError(f"Llama.cpp server failed: {response.text}")
+                raise RuntimeError(f"LLM 서버 오류: {response.text}")
                 
             result = response.json()
             content = result['choices'][0]['message']['content']
             
-            print(f"[OCR] Llama.cpp response: {content[:100]}...")
+            print(f"[OCR 2단계] LLM 응답: {content[:200]}...")
             
-            # JSON 파싱 시도
+            # JSON 파싱
             try:
                 data = json.loads(content)
                 return data
@@ -123,12 +201,32 @@ JSON만 반환하세요."""
                     content = content.split("```")[1].split("```")[0].strip()
                     return json.loads(content)
                 else:
-                    raise RuntimeError("Failed to parse JSON from Llama.cpp response")
+                    raise RuntimeError("JSON 파싱 실패")
             
         except Exception as e:
-            print(f"[OCR ERROR] {str(e)}")
-            # 에러 발생 시 빈 데이터 반환 대신 에러 전파
-            raise RuntimeError(f"OCR processing failed: {str(e)}")
+            print(f"[OCR 2단계 오류] {str(e)}")
+            raise RuntimeError(f"텍스트 구조화 실패: {str(e)}")
+    
+    def process_image(self, image_data: bytes) -> Dict[str, Any]:
+        """
+        전체 파이프라인 실행 (1단계 + 2단계)
+        
+        Args:
+            image_data: 이미지 바이트 데이터
+            
+        Returns:
+            구조화된 영수증 데이터 (raw_text 포함)
+        """
+        # 1단계: 텍스트 추출
+        raw_text = self.extract_text(image_data)
+        
+        # 2단계: 구조화
+        structured_data = self.structure_text(raw_text)
+        
+        # 원시 텍스트도 결과에 포함
+        structured_data['raw_text'] = raw_text
+        
+        return structured_data
 
     def process_base64(self, base64_image: str) -> Dict[str, Any]:
         """Base64 이미지 처리"""
@@ -137,10 +235,10 @@ JSON만 반환하세요."""
         image_data = base64.b64decode(base64_image)
         return self.process_image(image_data)
 
+
 def preprocess_receipt_image(image_data: bytes) -> bytes:
     """
     영수증 이미지 전처리
-    (Llama.cpp는 원본 이미지를 잘 처리할 수 있으므로 최소한의 처리만 수행)
     """
     try:
         from PIL import ImageEnhance

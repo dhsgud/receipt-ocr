@@ -4,6 +4,7 @@ Receipt OCR Server with Llama.cpp
 """
 
 import io
+import json
 import base64
 import sqlite3
 import traceback
