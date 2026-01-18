@@ -1,6 +1,6 @@
 """
 Receipt OCR Module using Two-Stage Pipeline
-1. OCR Stage: PaddleOCR 3.x로 이미지에서 텍스트 추출
+1. OCR Stage: EasyOCR로 이미지에서 텍스트 추출
 2. Structuring Stage: LLM 모델로 텍스트를 JSON 구조화
 """
 
@@ -15,23 +15,18 @@ import numpy as np
 # 손상된/불완전한 이미지 로드 허용
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
-# PaddleOCR 초기화 (지연 로딩)
-_paddle_ocr = None
+# EasyOCR 초기화 (지연 로딩)
+_easy_ocr = None
 
-def get_paddle_ocr():
-    """PaddleOCR 3.x 싱글톤 (첫 호출 시 초기화)"""
-    global _paddle_ocr
-    if _paddle_ocr is None:
-        from paddleocr import PaddleOCR
-        # PaddleOCR 3.x API - 간단한 OCR만 사용
-        _paddle_ocr = PaddleOCR(
-            use_doc_orientation_classify=False,  # 문서 방향 분류 비활성화 (속도 향상)
-            use_doc_unwarping=False,  # 문서 왜곡 보정 비활성화 (속도 향상)
-            use_textline_orientation=False,  # 텍스트 라인 방향 비활성화 (속도 향상)
-            lang='korean'
-        )
-        print("[PaddleOCR 3.x] 초기화 완료")
-    return _paddle_ocr
+def get_easy_ocr():
+    """EasyOCR 싱글톤 (첫 호출 시 초기화)"""
+    global _easy_ocr
+    if _easy_ocr is None:
+        import easyocr
+        # 한국어 + 영어 지원, GPU 사용 안 함 (Raspberry Pi)
+        _easy_ocr = easyocr.Reader(['ko', 'en'], gpu=False)
+        print("[EasyOCR] 초기화 완료 (한국어 + 영어)")
+    return _easy_ocr
 
 
 # ============== LLM 서버 설정 ==============
@@ -44,7 +39,7 @@ REQUEST_TIMEOUT = 300
 
 
 class ReceiptOCR:
-    """2단계 OCR 파이프라인 클라이언트 (PaddleOCR 3.x + LLM)"""
+    """2단계 OCR 파이프라인 클라이언트 (EasyOCR + LLM)"""
     
     def __init__(self, use_gpu: bool = False, lang: str = 'korean'):
         """초기화"""
@@ -53,7 +48,7 @@ class ReceiptOCR:
         
     def extract_text(self, image_data: bytes) -> str:
         """
-        1단계: PaddleOCR 3.x로 이미지에서 텍스트 추출
+        1단계: EasyOCR로 이미지에서 텍스트 추출
         
         Args:
             image_data: 이미지 바이트 데이터
@@ -62,50 +57,33 @@ class ReceiptOCR:
             추출된 원시 텍스트
         """
         try:
-            # 임시 파일로 저장 (PaddleOCR 3.x는 파일 경로 또는 URL 입력)
-            import tempfile
-            import os
+            # 이미지를 numpy 배열로 변환
+            image = Image.open(io.BytesIO(image_data))
+            if image.mode != 'RGB':
+                image = image.convert('RGB')
+            img_array = np.array(image)
             
-            with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as tmp_file:
-                tmp_file.write(image_data)
-                tmp_path = tmp_file.name
+            print(f"[OCR 1단계] EasyOCR 처리 중... (이미지 크기: {image.size})")
             
-            try:
-                print(f"[OCR 1단계] PaddleOCR 3.x 처리 중...")
-                
-                # PaddleOCR 3.x API - predict 메서드 사용
-                ocr = get_paddle_ocr()
-                results = ocr.predict(input=tmp_path)
-                
-                # 결과에서 텍스트 추출
-                lines = []
-                for result in results:
-                    # result 객체에서 rec_texts 속성으로 텍스트 접근
-                    if hasattr(result, 'rec_texts') and result.rec_texts:
-                        for text in result.rec_texts:
-                            if text and text.strip():
-                                lines.append(text.strip())
-                    # 또는 dict 형태일 경우
-                    elif hasattr(result, '__dict__'):
-                        result_dict = result.__dict__
-                        if 'rec_texts' in result_dict:
-                            for text in result_dict['rec_texts']:
-                                if text and text.strip():
-                                    lines.append(text.strip())
-                
-                raw_text = '\n'.join(lines)
-                
-                print(f"[OCR 1단계] 추출 완료 ({len(lines)}줄, {len(raw_text)}자)")
-                print("-" * 40)
-                print(raw_text[:500] + "..." if len(raw_text) > 500 else raw_text)
-                print("-" * 40)
-                
-                return raw_text
-                
-            finally:
-                # 임시 파일 삭제
-                if os.path.exists(tmp_path):
-                    os.unlink(tmp_path)
+            # EasyOCR 실행
+            reader = get_easy_ocr()
+            results = reader.readtext(img_array)
+            
+            # 결과에서 텍스트 추출 (위에서 아래, 왼쪽에서 오른쪽 순서)
+            # results 형식: [(bbox, text, confidence), ...]
+            lines = []
+            for (bbox, text, confidence) in results:
+                if text and text.strip():
+                    lines.append(text.strip())
+            
+            raw_text = '\n'.join(lines)
+            
+            print(f"[OCR 1단계] 추출 완료 ({len(lines)}줄, {len(raw_text)}자)")
+            print("-" * 40)
+            print(raw_text[:500] + "..." if len(raw_text) > 500 else raw_text)
+            print("-" * 40)
+            
+            return raw_text
             
         except Exception as e:
             print(f"[OCR 1단계 오류] {str(e)}")
@@ -234,7 +212,7 @@ JSON만 응답해주세요."""
         Returns:
             구조화된 영수증 데이터 (raw_text 포함)
         """
-        # 1단계: PaddleOCR로 텍스트 추출
+        # 1단계: EasyOCR로 텍스트 추출
         raw_text = self.extract_text(image_data)
         
         # 2단계: LLM으로 구조화
