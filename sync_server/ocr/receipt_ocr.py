@@ -1,6 +1,6 @@
 """
 Receipt OCR Module using Two-Stage Pipeline
-1. OCR Stage: PaddleOCR 3.x로 이미지에서 텍스트 추출
+1. OCR Stage: PaddleOCR 2.x로 이미지에서 텍스트 추출
 2. Structuring Stage: LLM 모델로 텍스트를 JSON 구조화
 """
 
@@ -8,7 +8,6 @@ import io
 import json
 import base64
 import requests
-import os
 from typing import Optional, Any, Dict, List
 from PIL import Image, ImageFile
 import numpy as np
@@ -16,26 +15,22 @@ import numpy as np
 # 손상된/불완전한 이미지 로드 허용
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
-# 모델 소스 체크 비활성화 (속도 향상)
-os.environ['DISABLE_MODEL_SOURCE_CHECK'] = 'True'
-
 # PaddleOCR 초기화 (지연 로딩)
 _paddle_ocr = None
 
 def get_paddle_ocr():
-    """PaddleOCR 3.x 싱글톤 (첫 호출 시 초기화)"""
+    """PaddleOCR 2.x 싱글톤 (첫 호출 시 초기화)"""
     global _paddle_ocr
     if _paddle_ocr is None:
         from paddleocr import PaddleOCR
-        # PaddleOCR 3.x - CPU 전용, 최소 옵션
+        # PaddleOCR 2.x API
         _paddle_ocr = PaddleOCR(
+            use_angle_cls=True,  # 기울어진 텍스트 보정
             lang='korean',
-            device='cpu',  # CPU 명시
-            use_doc_orientation_classify=False,  # 문서 방향 분류 OFF
-            use_doc_unwarping=False,  # 문서 왜곡 보정 OFF  
-            use_textline_orientation=False,  # 텍스트라인 방향 OFF
+            use_gpu=False,  # CPU 사용
+            show_log=False,  # 로그 출력 최소화
         )
-        print("[PaddleOCR 3.x] 초기화 완료 (CPU 모드)")
+        print("[PaddleOCR 2.x] 초기화 완료 (CPU 모드)")
     return _paddle_ocr
 
 
@@ -49,7 +44,7 @@ REQUEST_TIMEOUT = 300
 
 
 class ReceiptOCR:
-    """2단계 OCR 파이프라인 클라이언트 (PaddleOCR 3.x + LLM)"""
+    """2단계 OCR 파이프라인 클라이언트 (PaddleOCR 2.x + LLM)"""
     
     def __init__(self, use_gpu: bool = False, lang: str = 'korean'):
         """초기화"""
@@ -58,7 +53,7 @@ class ReceiptOCR:
         
     def extract_text(self, image_data: bytes) -> str:
         """
-        1단계: PaddleOCR 3.x로 이미지에서 텍스트 추출
+        1단계: PaddleOCR 2.x로 이미지에서 텍스트 추출
         
         Args:
             image_data: 이미지 바이트 데이터
@@ -67,50 +62,39 @@ class ReceiptOCR:
             추출된 원시 텍스트
         """
         try:
-            import tempfile
+            # 이미지를 numpy 배열로 변환
+            image = Image.open(io.BytesIO(image_data))
+            if image.mode != 'RGB':
+                image = image.convert('RGB')
+            img_array = np.array(image)
             
-            # 임시 파일로 저장
-            with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as tmp_file:
-                tmp_file.write(image_data)
-                tmp_path = tmp_file.name
+            print(f"[OCR 1단계] PaddleOCR 2.x 처리 중... (이미지 크기: {image.size})")
             
-            try:
-                print(f"[OCR 1단계] PaddleOCR 3.x 처리 중...")
-                
-                # PaddleOCR 3.x API
-                ocr = get_paddle_ocr()
-                results = ocr.predict(input=tmp_path)
-                
-                # 결과에서 텍스트 추출
-                lines = []
-                for result in results:
-                    # result.json 속성으로 딕셔너리 접근
-                    if hasattr(result, 'json'):
-                        result_dict = result.json
-                        # rec_texts 키에서 텍스트 추출
-                        if 'rec_texts' in result_dict:
-                            for text in result_dict['rec_texts']:
-                                if text and text.strip():
-                                    lines.append(text.strip())
-                    # 또는 직접 속성 접근
-                    elif hasattr(result, 'rec_texts') and result.rec_texts:
-                        for text in result.rec_texts:
+            # PaddleOCR 2.x API
+            ocr = get_paddle_ocr()
+            result = ocr.ocr(img_array, cls=True)
+            
+            # 결과에서 텍스트 추출
+            # result 형식: [[[좌표], (텍스트, 신뢰도)], ...]
+            lines = []
+            if result and result[0]:
+                for line in result[0]:
+                    # line: [[x1,y1], [x2,y2], [x3,y3], [x4,y4]], (text, confidence)
+                    if len(line) >= 2:
+                        text_info = line[1]
+                        if isinstance(text_info, tuple) and len(text_info) >= 1:
+                            text = text_info[0]
                             if text and text.strip():
                                 lines.append(text.strip())
-                
-                raw_text = '\n'.join(lines)
-                
-                print(f"[OCR 1단계] 추출 완료 ({len(lines)}줄, {len(raw_text)}자)")
-                print("-" * 40)
-                print(raw_text[:500] + "..." if len(raw_text) > 500 else raw_text)
-                print("-" * 40)
-                
-                return raw_text
-                
-            finally:
-                # 임시 파일 삭제
-                if os.path.exists(tmp_path):
-                    os.unlink(tmp_path)
+            
+            raw_text = '\n'.join(lines)
+            
+            print(f"[OCR 1단계] 추출 완료 ({len(lines)}줄, {len(raw_text)}자)")
+            print("-" * 40)
+            print(raw_text[:500] + "..." if len(raw_text) > 500 else raw_text)
+            print("-" * 40)
+            
+            return raw_text
             
         except Exception as e:
             print(f"[OCR 1단계 오류] {str(e)}")
@@ -232,12 +216,6 @@ JSON만 응답해주세요."""
     def process_image(self, image_data: bytes) -> Dict[str, Any]:
         """
         전체 파이프라인 실행 (1단계 + 2단계)
-        
-        Args:
-            image_data: 이미지 바이트 데이터
-            
-        Returns:
-            구조화된 영수증 데이터 (raw_text 포함)
         """
         # 1단계: PaddleOCR로 텍스트 추출
         raw_text = self.extract_text(image_data)
@@ -259,16 +237,13 @@ JSON만 응답해주세요."""
 
 
 def preprocess_receipt_image(image_data: bytes) -> bytes:
-    """
-    영수증 이미지 전처리
-    """
+    """영수증 이미지 전처리"""
     try:
         from PIL import ImageEnhance
         image = Image.open(io.BytesIO(image_data))
         if image.mode in ('RGBA', 'P'):
             image = image.convert('RGB')
         
-        # 크기 조정 (너무 큰 이미지는 리사이즈)
         if max(image.size) > 2048:
             image.thumbnail((2048, 2048))
             
