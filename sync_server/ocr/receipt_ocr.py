@@ -1,6 +1,6 @@
 """
 Receipt OCR Module using Two-Stage Pipeline
-1. OCR Stage: PaddleOCR로 이미지에서 텍스트 추출
+1. OCR Stage: PaddleOCR 3.x로 이미지에서 텍스트 추출
 2. Structuring Stage: LLM 모델로 텍스트를 JSON 구조화
 """
 
@@ -19,13 +19,18 @@ ImageFile.LOAD_TRUNCATED_IMAGES = True
 _paddle_ocr = None
 
 def get_paddle_ocr():
-    """PaddleOCR 싱글톤 (첫 호출 시 초기화)"""
+    """PaddleOCR 3.x 싱글톤 (첫 호출 시 초기화)"""
     global _paddle_ocr
     if _paddle_ocr is None:
         from paddleocr import PaddleOCR
-        # PaddleOCR 3.x 버전용 초기화
-        _paddle_ocr = PaddleOCR(lang='korean')
-        print("[PaddleOCR] 초기화 완료")
+        # PaddleOCR 3.x API - 간단한 OCR만 사용
+        _paddle_ocr = PaddleOCR(
+            use_doc_orientation_classify=False,  # 문서 방향 분류 비활성화 (속도 향상)
+            use_doc_unwarping=False,  # 문서 왜곡 보정 비활성화 (속도 향상)
+            use_textline_orientation=False,  # 텍스트 라인 방향 비활성화 (속도 향상)
+            lang='korean'
+        )
+        print("[PaddleOCR 3.x] 초기화 완료")
     return _paddle_ocr
 
 
@@ -39,7 +44,7 @@ REQUEST_TIMEOUT = 300
 
 
 class ReceiptOCR:
-    """2단계 OCR 파이프라인 클라이언트 (PaddleOCR + LLM)"""
+    """2단계 OCR 파이프라인 클라이언트 (PaddleOCR 3.x + LLM)"""
     
     def __init__(self, use_gpu: bool = False, lang: str = 'korean'):
         """초기화"""
@@ -48,7 +53,7 @@ class ReceiptOCR:
         
     def extract_text(self, image_data: bytes) -> str:
         """
-        1단계: PaddleOCR로 이미지에서 텍스트 추출
+        1단계: PaddleOCR 3.x로 이미지에서 텍스트 추출
         
         Args:
             image_data: 이미지 바이트 데이터
@@ -57,42 +62,55 @@ class ReceiptOCR:
             추출된 원시 텍스트
         """
         try:
-            # 이미지 로드
-            image = Image.open(io.BytesIO(image_data))
-            if image.mode != 'RGB':
-                image = image.convert('RGB')
+            # 임시 파일로 저장 (PaddleOCR 3.x는 파일 경로 또는 URL 입력)
+            import tempfile
+            import os
             
-            # numpy 배열로 변환 (PaddleOCR 입력)
-            img_array = np.array(image)
+            with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as tmp_file:
+                tmp_file.write(image_data)
+                tmp_path = tmp_file.name
             
-            print(f"[OCR 1단계] PaddleOCR 처리 중... (이미지 크기: {image.size})")
-            
-            # PaddleOCR 실행
-            ocr = get_paddle_ocr()
-            result = ocr.ocr(img_array, cls=True)
-            
-            # 결과 파싱 - 텍스트만 추출
-            lines = []
-            if result and result[0]:
-                for line in result[0]:
-                    # line 형식: [[좌표들], (텍스트, 신뢰도)]
-                    if len(line) >= 2:
-                        text = line[1][0]  # 텍스트
-                        confidence = line[1][1]  # 신뢰도
-                        if text.strip():
-                            lines.append(text.strip())
-            
-            raw_text = '\n'.join(lines)
-            
-            print(f"[OCR 1단계] 추출 완료 ({len(lines)}줄, {len(raw_text)}자)")
-            print("-" * 40)
-            print(raw_text[:500] + "..." if len(raw_text) > 500 else raw_text)
-            print("-" * 40)
-            
-            return raw_text
+            try:
+                print(f"[OCR 1단계] PaddleOCR 3.x 처리 중...")
+                
+                # PaddleOCR 3.x API - predict 메서드 사용
+                ocr = get_paddle_ocr()
+                results = ocr.predict(input=tmp_path)
+                
+                # 결과에서 텍스트 추출
+                lines = []
+                for result in results:
+                    # result 객체에서 rec_texts 속성으로 텍스트 접근
+                    if hasattr(result, 'rec_texts') and result.rec_texts:
+                        for text in result.rec_texts:
+                            if text and text.strip():
+                                lines.append(text.strip())
+                    # 또는 dict 형태일 경우
+                    elif hasattr(result, '__dict__'):
+                        result_dict = result.__dict__
+                        if 'rec_texts' in result_dict:
+                            for text in result_dict['rec_texts']:
+                                if text and text.strip():
+                                    lines.append(text.strip())
+                
+                raw_text = '\n'.join(lines)
+                
+                print(f"[OCR 1단계] 추출 완료 ({len(lines)}줄, {len(raw_text)}자)")
+                print("-" * 40)
+                print(raw_text[:500] + "..." if len(raw_text) > 500 else raw_text)
+                print("-" * 40)
+                
+                return raw_text
+                
+            finally:
+                # 임시 파일 삭제
+                if os.path.exists(tmp_path):
+                    os.unlink(tmp_path)
             
         except Exception as e:
             print(f"[OCR 1단계 오류] {str(e)}")
+            import traceback
+            traceback.print_exc()
             raise RuntimeError(f"텍스트 추출 실패: {str(e)}")
     
     def structure_text(self, raw_text: str) -> Dict[str, Any]:
