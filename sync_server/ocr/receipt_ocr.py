@@ -23,13 +23,8 @@ def get_paddle_ocr():
     global _paddle_ocr
     if _paddle_ocr is None:
         from paddleocr import PaddleOCR
-        # use_angle_cls: 회전된 텍스트 감지
-        # lang: korean 한국어 지원
-        _paddle_ocr = PaddleOCR(
-            use_angle_cls=True,
-            lang='korean',
-            show_log=False,  # 로그 출력 줄이기
-        )
+        # PaddleOCR 3.x 버전용 초기화
+        _paddle_ocr = PaddleOCR(lang='korean')
         print("[PaddleOCR] 초기화 완료")
     return _paddle_ocr
 
