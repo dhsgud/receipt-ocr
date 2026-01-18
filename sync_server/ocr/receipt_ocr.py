@@ -38,7 +38,7 @@ def get_paddle_ocr():
 
 # ============== LLM 서버 설정 ==============
 # 2단계: LLM 모델 (텍스트 -> JSON)
-LLM_SERVER_URL = "http://183.96.3.137:409/v1/chat/completions"
+LLM_SERVER_URL = "http://183.96.3.137:408/v1/chat/completions"
 LLM_MODEL_NAME = "user-model"
 
 # 타임아웃 설정 (초)
