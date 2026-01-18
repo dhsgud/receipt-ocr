@@ -19,18 +19,13 @@ ImageFile.LOAD_TRUNCATED_IMAGES = True
 _paddle_ocr = None
 
 def get_paddle_ocr():
-    """PaddleOCR 2.x 싱글톤 (첫 호출 시 초기화)"""
+    """PaddleOCR 싱글톤 (첫 호출 시 초기화)"""
     global _paddle_ocr
     if _paddle_ocr is None:
         from paddleocr import PaddleOCR
-        # PaddleOCR 2.x API
-        _paddle_ocr = PaddleOCR(
-            use_angle_cls=True,  # 기울어진 텍스트 보정
-            lang='korean',
-            use_gpu=False,  # CPU 사용
-            show_log=False,  # 로그 출력 최소화
-        )
-        print("[PaddleOCR 2.x] 초기화 완료 (CPU 모드)")
+        # PaddleOCR - 최소 옵션만 사용
+        _paddle_ocr = PaddleOCR(lang='korean')
+        print("[PaddleOCR] 초기화 완료")
     return _paddle_ocr
 
 
@@ -70,9 +65,9 @@ class ReceiptOCR:
             
             print(f"[OCR 1단계] PaddleOCR 2.x 처리 중... (이미지 크기: {image.size})")
             
-            # PaddleOCR 2.x API
+            # PaddleOCR API
             ocr = get_paddle_ocr()
-            result = ocr.ocr(img_array, cls=True)
+            result = ocr.ocr(img_array)
             
             # 결과에서 텍스트 추출
             # result 형식: [[[좌표], (텍스트, 신뢰도)], ...]
