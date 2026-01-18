@@ -25,11 +25,9 @@ def get_paddle_ocr():
         from paddleocr import PaddleOCR
         # use_angle_cls: 회전된 텍스트 감지
         # lang: korean 한국어 지원
-        # use_gpu: GPU 사용 여부 (Raspberry Pi는 False)
         _paddle_ocr = PaddleOCR(
             use_angle_cls=True,
             lang='korean',
-            use_gpu=False,
             show_log=False,  # 로그 출력 줄이기
         )
         print("[PaddleOCR] 초기화 완료")
