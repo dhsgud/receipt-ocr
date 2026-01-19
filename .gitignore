@@ -1,0 +1,76 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+venv/
+ENV/
+env/
+.venv/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Database
+*.db
+*.sqlite3
+
+# Logs
+*.log
+
+# Local settings
+.env
+.env.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# PaddleOCR / OCR models cache
+.paddlex/
+.paddleocr/
+
+# Temp files
+*.tmp
+*.temp
+
+# Sync server specific
+sync_server/sync_data.db
+
+# Executables
+*.exe
+
+# Virtual environments (additional)
+*-env/
+*_env/
+receipt-env/
+benchmark-env/
+
+# Benchmark results
+ocr_benchmark/benchmark_results.json
+ocr_benchmark/*.json
+
+# llama.cpp (large binaries)
+llama.cpp/
