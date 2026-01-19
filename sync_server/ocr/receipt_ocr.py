@@ -15,7 +15,7 @@ ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 # ============== 서버 설정 ==============
 # Vision LLM 서버 (이미지 -> JSON 한 번에)
-VISION_SERVER_URL = "http://183.96.3.137:409/v1/chat/completions"
+VISION_SERVER_URL = "http://183.96.3.137:408/v1/chat/completions"
 MODEL_NAME = "user-model"
 
 # 타임아웃 설정 (초)
