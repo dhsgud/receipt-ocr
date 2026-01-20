@@ -223,11 +223,24 @@ async def chat_completions(request: ChatRequest):
         
         for msg in reversed(request.messages):
             if msg.role == "user":
-                image = extract_image_from_content(msg.content)
-                prompt_text = extract_text_from_content(msg.content)
+                # 디버깅: content 타입과 내용 확인
+                logger.info(f"Message content type: {type(msg.content)}")
+                
+                # content를 적절한 형식으로 변환
+                content = msg.content
+                if hasattr(content, 'model_dump'):
+                    content = content.model_dump()
+                elif hasattr(content, '__iter__') and not isinstance(content, (str, dict)):
+                    content = [item.model_dump() if hasattr(item, 'model_dump') else item for item in content]
+                
+                logger.info(f"Processed content: {str(content)[:500]}")
+                
+                image = extract_image_from_content(content)
+                prompt_text = extract_text_from_content(content)
                 break
         
         if image is None:
+            logger.error("No image found in the request content")
             raise HTTPException(status_code=400, detail="No image provided")
         
         # LightOnOCR 형식으로 conversation 구성
