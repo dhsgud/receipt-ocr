@@ -60,6 +60,8 @@ class BatchReceiptItem {
     } else {
       category = guessCategory(data.storeName ?? '');
     }
+    // 수입 여부 자동 설정
+    isIncome = data.isIncome;
   }
 }
 
@@ -210,6 +212,9 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
         } else {
           _selectedCategory = _guessCategory(receiptData.storeName ?? '');
         }
+        
+        // 수입 여부 자동 설정
+        _isIncome = receiptData.isIncome;
       });
     } catch (e) {
       setState(() {

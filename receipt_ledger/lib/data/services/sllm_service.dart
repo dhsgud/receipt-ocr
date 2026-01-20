@@ -62,14 +62,23 @@ class SllmService {
   Future<ReceiptData> _parseWithExternalLlama(Uint8List imageBytes, String serverUrl) async {
     final base64Image = base64Encode(imageBytes);
     
-    final prompt = """이 영수증 이미지를 분석하여 아래 JSON 형식으로 정보를 추출하세요.
+    final prompt = """이 영수증/급여명세서 이미지를 분석하여 JSON 형식으로 정리해주세요.
 
 필드 설명:
-- store_name: 상호명/가게 이름
-- date: 날짜 (YYYY-MM-DD 형식으로 변환)
-- total_amount: 총 결제 금액 (정수, 원 단위)
-- category: 지출 카테고리 (식비, 교통, 쇼핑, 의료, 생활, 문화, 기타 중 하나)
-- items: 구매 품목 리스트 [{name, quantity, unit_price, total_price}]
+- store_name: 상호명/회사명
+- date: 날짜 (YYYY-MM-DD 형식)
+- total_amount: 총 금액 (정수, 원 단위)
+- category: 카테고리
+- is_income: 수입 여부 (true/false)
+- items: 품목 리스트 [{name, quantity, unit_price, total_price}]
+
+⚠️ 수입/지출 구분 규칙:
+- 급여명세서, 월급, 상여금, 보너스, 배당금, 이자, 환급금 → is_income: true
+- 구매/결제 영수증 → is_income: false
+
+⚠️ 카테고리:
+[지출] 식비, 교통, 쇼핑, 의료, 생활, 문화, 카페, 편의점, 마트, 기타
+[수입] 월급, 상여금, 투자수익, 부수입, 기타수입
 
 JSON만 반환하세요.""";
 

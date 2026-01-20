@@ -6,6 +6,7 @@ class ReceiptData {
   final List<ReceiptItem> items;
   final String? rawText;
   final String? category;  // 서버에서 자동 판단된 카테고리
+  final bool isIncome;     // 수입 여부 (true: 수입, false: 지출)
 
   ReceiptData({
     this.storeName,
@@ -14,7 +15,14 @@ class ReceiptData {
     this.items = const [],
     this.rawText,
     this.category,
+    this.isIncome = false,
   });
+
+  /// 수입 카테고리인지 확인
+  static bool _isIncomeCategory(String? category) {
+    const incomeCategories = ['월급', '상여금', '투자수익', '부수입', '기타수입'];
+    return category != null && incomeCategories.contains(category);
+  }
 
   factory ReceiptData.fromSllmResponse(Map<String, dynamic> json) {
     // Parse SLLM response - adjust based on actual SLLM API format
@@ -31,6 +39,12 @@ class ReceiptData {
       } catch (_) {}
     }
 
+    // 수입 여부 판단: is_income 필드 또는 카테고리로 판단
+    final category = json['category'] as String?;
+    final isIncome = json['is_income'] == true || 
+                     json['isIncome'] == true ||
+                     _isIncomeCategory(category);
+
     return ReceiptData(
       storeName: json['store_name'] as String? ?? json['storeName'] as String?,
       date: parsedDate,
@@ -39,7 +53,8 @@ class ReceiptData {
                    (json['total'] as num?)?.toDouble(),
       items: items,
       rawText: json['raw_text'] as String? ?? json['rawText'] as String?,
-      category: json['category'] as String?,
+      category: category,
+      isIncome: isIncome,
     );
   }
 

@@ -15,6 +15,7 @@ from contextlib import contextmanager
 
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 # Import OCR modules
@@ -23,10 +24,14 @@ from ocr.receipt_ocr import ReceiptOCR, preprocess_receipt_image
 # Database path
 DB_PATH = Path(__file__).parent / "sync_data.db"
 
+# Image storage path
+IMAGES_PATH = Path(__file__).parent / "images"
+IMAGES_PATH.mkdir(exist_ok=True)
+
 app = FastAPI(
     title="Receipt Ledger OCR Server",
     description="Llama.cpp 기반 영수증 OCR 서버",
-    version="2.1.0"
+    version="2.2.0"
 )
 
 # CORS 설정
@@ -269,8 +274,8 @@ async def health_check():
     return {
         "status": "ok",
         "time": datetime.now().isoformat(),
-        "version": "2.1.0",
-        "features": ["sync", "ocr"],
+        "version": "2.2.0",
+        "features": ["sync", "ocr", "images"],
     }
 
 
@@ -279,14 +284,82 @@ async def root():
     """API 정보"""
     return {
         "name": "Receipt Ledger OCR Server",
-        "version": "2.1.0",
+        "version": "2.2.0",
         "endpoints": {
             "ocr": "/api/ocr",
             "ocr_upload": "/api/ocr/upload",
             "sync": "/api/sync",
+            "images": "/api/images/{transaction_id}",
             "health": "/health",
         }
     }
+
+
+# ============== Image Endpoints ==============
+
+class ImageUploadRequest(BaseModel):
+    """이미지 업로드 요청"""
+    image: str  # Base64 encoded image
+
+
+@app.post("/api/images/{transaction_id}")
+async def upload_image(transaction_id: str, request: ImageUploadRequest):
+    """
+    트랜잭션 ID에 해당하는 영수증 이미지 업로드 (Base64)
+    """
+    try:
+        # Base64 디코딩
+        image_data = request.image
+        if ',' in image_data:
+            image_data = image_data.split(',')[1]
+        
+        image_bytes = base64.b64decode(image_data)
+        
+        # 이미지 저장
+        image_path = IMAGES_PATH / f"{transaction_id}.jpg"
+        with open(image_path, 'wb') as f:
+            f.write(image_bytes)
+        
+        print(f"[Image] Saved: {image_path} ({len(image_bytes)} bytes)")
+        
+        return {
+            "status": "ok",
+            "transaction_id": transaction_id,
+            "size_bytes": len(image_bytes),
+        }
+    except Exception as e:
+        print(f"[Image ERROR] {str(e)}")
+        raise HTTPException(status_code=500, detail=f"이미지 저장 실패: {str(e)}")
+
+
+@app.get("/api/images/{transaction_id}")
+async def get_image(transaction_id: str):
+    """
+    트랜잭션 ID에 해당하는 영수증 이미지 다운로드
+    """
+    image_path = IMAGES_PATH / f"{transaction_id}.jpg"
+    
+    if not image_path.exists():
+        raise HTTPException(status_code=404, detail="이미지를 찾을 수 없습니다")
+    
+    return FileResponse(
+        path=str(image_path),
+        media_type="image/jpeg",
+        filename=f"{transaction_id}.jpg"
+    )
+
+
+@app.head("/api/images/{transaction_id}")
+async def check_image(transaction_id: str):
+    """
+    이미지 존재 여부 확인 (HEAD 요청)
+    """
+    image_path = IMAGES_PATH / f"{transaction_id}.jpg"
+    
+    if not image_path.exists():
+        raise HTTPException(status_code=404, detail="이미지를 찾을 수 없습니다")
+    
+    return {"exists": True}
 
 
 # ============== Sync Endpoints (기존 sync_server.py와 동일) ==============

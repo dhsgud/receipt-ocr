@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -6,6 +7,7 @@ import 'package:uuid/uuid.dart';
 import '../../core/constants/app_constants.dart';
 import '../models/transaction.dart';
 import '../repositories/transaction_repository.dart';
+import 'image_cache_service.dart';
 
 /// Sync service for sharing data between partners via desktop server
 class SyncService {
@@ -15,6 +17,7 @@ class SyncService {
 
   final TransactionRepository _repository;
   final Dio _dio;
+  final ImageCacheService _imageCacheService;
   SharedPreferences? _prefs;
   
   String? _myKey;
@@ -22,12 +25,17 @@ class SyncService {
   String? _lastSyncTime;
   bool _isSyncing = false;
 
-  SyncService(this._repository) : _dio = Dio(BaseOptions(
-    baseUrl: AppConstants.syncServerUrl,
-    connectTimeout: const Duration(seconds: 10),
-    receiveTimeout: const Duration(seconds: 30),
-    headers: {'Content-Type': 'application/json'},
-  ));
+  SyncService(this._repository) : 
+    _dio = Dio(BaseOptions(
+      baseUrl: AppConstants.syncServerUrl,
+      connectTimeout: const Duration(seconds: 10),
+      receiveTimeout: const Duration(seconds: 30),
+      headers: {'Content-Type': 'application/json'},
+    )),
+    _imageCacheService = ImageCacheService();
+
+  /// 이미지 캐시 서비스 접근자
+  ImageCacheService get imageCacheService => _imageCacheService;
 
   Future<void> _ensureInitialized() async {
     _prefs ??= await SharedPreferences.getInstance();
@@ -107,6 +115,18 @@ class SyncService {
 
       debugPrint('Syncing ${unsyncedTransactions.length} transactions...');
 
+      // Upload images for unsynced transactions (before sync)
+      if (!kIsWeb) {
+        for (final t in unsyncedTransactions) {
+          if (t.receiptImagePath != null && t.receiptImagePath!.isNotEmpty) {
+            final file = File(t.receiptImagePath!);
+            if (await file.exists()) {
+              await _imageCacheService.uploadImage(t.id, t.receiptImagePath!);
+            }
+          }
+        }
+      }
+
       // Send sync request
       final response = await _dio.post('/api/sync', data: requestData);
 
@@ -115,10 +135,21 @@ class SyncService {
         final serverTime = data['serverTime'] as String;
         final downloaded = data['downloaded'] as List;
         
-        // Save downloaded transactions
+        // Save downloaded transactions and cache their images
         for (final json in downloaded) {
           final transaction = TransactionModel.fromMap(json as Map<String, dynamic>);
-          await _repository.insertTransaction(transaction.copyWith(isSynced: true));
+          
+          // Download and cache image if available
+          String? cachedImagePath;
+          if (!kIsWeb) {
+            cachedImagePath = await _imageCacheService.downloadAndCacheImage(transaction.id);
+          }
+          
+          // Update transaction with cached image path
+          await _repository.insertTransaction(transaction.copyWith(
+            isSynced: true,
+            receiptImagePath: cachedImagePath ?? transaction.receiptImagePath,
+          ));
         }
 
         // Mark uploaded transactions as synced

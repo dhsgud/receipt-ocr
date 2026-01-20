@@ -1,3 +1,6 @@
+import 'dart:io';
+
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:table_calendar/table_calendar.dart';
@@ -169,6 +172,9 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
+              // 영수증 이미지 표시 (서버 이미지 지원)
+              if (!kIsWeb)
+                _buildReceiptImageWithServer(context, transaction),
               _buildDetailRow('설명', transaction.description),
               _buildDetailRow('금액', '${transaction.isIncome ? '+' : '-'}${Formatters.currency(transaction.amount)}'),
               _buildDetailRow('카테고리', transaction.category),
@@ -188,6 +194,133 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
             child: const Text('닫기'),
           ),
         ],
+      ),
+    );
+  }
+
+  /// 서버 이미지 지원하는 영수증 이미지 위젯
+  Widget _buildReceiptImageWithServer(BuildContext context, TransactionModel transaction) {
+    final syncService = ref.read(syncServiceProvider);
+    
+    return FutureBuilder<String?>(
+      future: syncService.imageCacheService.getImagePath(
+        transaction.id,
+        transaction.receiptImagePath,
+      ),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Padding(
+            padding: EdgeInsets.symmetric(vertical: 20),
+            child: Center(child: CircularProgressIndicator()),
+          );
+        }
+        
+        final imagePath = snapshot.data;
+        if (imagePath == null || imagePath.isEmpty) {
+          return const SizedBox.shrink();
+        }
+        
+        return _buildReceiptImageSection(context, imagePath);
+      },
+    );
+  }
+
+
+  /// 영수증 이미지 섹션 빌드
+  Widget _buildReceiptImageSection(BuildContext context, String imagePath) {
+    final file = File(imagePath);
+    if (!file.existsSync()) {
+      return const SizedBox.shrink();
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '영수증 이미지',
+          style: TextStyle(
+            fontSize: 13,
+            color: Colors.grey[500],
+          ),
+        ),
+        const SizedBox(height: 8),
+        GestureDetector(
+          onTap: () => _showFullScreenImage(context, imagePath),
+          child: Container(
+            width: double.infinity,
+            height: 150,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.grey.withOpacity(0.3)),
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  Image.file(
+                    file,
+                    fit: BoxFit.cover,
+                  ),
+                  Positioned(
+                    bottom: 8,
+                    right: 8,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.6),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.zoom_in, color: Colors.white, size: 16),
+                          SizedBox(width: 4),
+                          Text(
+                            '탭하여 확대',
+                            style: TextStyle(color: Colors.white, fontSize: 11),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+        const Divider(),
+        const SizedBox(height: 8),
+      ],
+    );
+  }
+
+  /// 전체화면 이미지 뷰어
+  void _showFullScreenImage(BuildContext context, String imagePath) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => Scaffold(
+          backgroundColor: Colors.black,
+          appBar: AppBar(
+            backgroundColor: Colors.black,
+            iconTheme: const IconThemeData(color: Colors.white),
+            title: const Text(
+              '영수증 이미지',
+              style: TextStyle(color: Colors.white),
+            ),
+          ),
+          body: InteractiveViewer(
+            minScale: 0.5,
+            maxScale: 4.0,
+            child: Center(
+              child: Image.file(
+                File(imagePath),
+                fit: BoxFit.contain,
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -447,12 +580,17 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     final monthlyTransactions = ref.watch(monthlyTransactionsProvider);
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
-    // Calculate daily totals for markers
-    final dailyTotals = <DateTime, double>{};
+    // Calculate daily totals for markers (수입/지출 분리)
+    final dailyExpense = <DateTime, double>{};
+    final dailyIncome = <DateTime, double>{};
     monthlyTransactions.whenData((transactions) {
       for (final t in transactions) {
         final day = DateTime(t.date.year, t.date.month, t.date.day);
-        dailyTotals[day] = (dailyTotals[day] ?? 0) + (t.isIncome ? 0 : t.amount);
+        if (t.isIncome) {
+          dailyIncome[day] = (dailyIncome[day] ?? 0) + t.amount;
+        } else {
+          dailyExpense[day] = (dailyExpense[day] ?? 0) + t.amount;
+        }
       }
     });
 
@@ -547,28 +685,58 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
               calendarBuilders: CalendarBuilders(
                 markerBuilder: (context, date, events) {
                   final day = DateTime(date.year, date.month, date.day);
-                  final total = dailyTotals[day];
-                  if (total == null || total == 0) return null;
+                  final expense = dailyExpense[day];
+                  final income = dailyIncome[day];
+                  
+                  // 수입/지출 모두 없으면 표시 안함
+                  if ((expense == null || expense == 0) && (income == null || income == 0)) {
+                    return null;
+                  }
 
                   return Positioned(
                     bottom: 1,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 4,
-                        vertical: 1,
-                      ),
-                      decoration: BoxDecoration(
-                        color: AppColors.expense.withOpacity(0.8),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Text(
-                        _formatShortAmount(total),
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 8,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
+                    left: 0,
+                    right: 0,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // 수입 배지 (초록색)
+                        if (income != null && income > 0)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 1),
+                            margin: const EdgeInsets.only(right: 1),
+                            decoration: BoxDecoration(
+                              color: AppColors.income.withOpacity(0.85),
+                              borderRadius: BorderRadius.circular(3),
+                            ),
+                            child: Text(
+                              '+${_formatShortAmount(income)}',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 7,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        // 지출 배지 (빨간색)
+                        if (expense != null && expense > 0)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 1),
+                            decoration: BoxDecoration(
+                              color: AppColors.expense.withOpacity(0.85),
+                              borderRadius: BorderRadius.circular(3),
+                            ),
+                            child: Text(
+                              _formatShortAmount(expense),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 7,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                      ],
                     ),
                   );
                 },

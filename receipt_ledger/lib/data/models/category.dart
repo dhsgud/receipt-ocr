@@ -88,11 +88,40 @@ class Category {
       color: const Color(0xFFBDC3C7),
       isDefault: true,
     ),
+    // ============ 수입 카테고리 ============
     Category(
-      id: 'income',
-      name: '수입',
-      emoji: '💰',
+      id: 'salary',
+      name: '월급',
+      emoji: '💵',
       color: const Color(0xFF22C55E),
+      isDefault: true,
+    ),
+    Category(
+      id: 'bonus',
+      name: '상여금',
+      emoji: '🎁',
+      color: const Color(0xFF16A34A),
+      isDefault: true,
+    ),
+    Category(
+      id: 'investment',
+      name: '투자수익',
+      emoji: '📈',
+      color: const Color(0xFF15803D),
+      isDefault: true,
+    ),
+    Category(
+      id: 'side_income',
+      name: '부수입',
+      emoji: '💼',
+      color: const Color(0xFF059669),
+      isDefault: true,
+    ),
+    Category(
+      id: 'etc_income',
+      name: '기타수입',
+      emoji: '💰',
+      color: const Color(0xFF10B981),
       isDefault: true,
     ),
   ];
