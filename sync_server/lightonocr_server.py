@@ -8,7 +8,7 @@ import io
 import os
 import base64
 import logging
-from typing import List, Optional, Union
+from typing import List, Optional, Union, Any
 from contextlib import asynccontextmanager
 
 import torch
@@ -30,19 +30,9 @@ model = None
 processor = None
 
 
-class ImageContent(BaseModel):
-    type: str  # "image_url"
-    image_url: dict  # {"url": "data:image/jpeg;base64,..."}
-
-
-class TextContent(BaseModel):
-    type: str  # "text"
-    text: str
-
-
 class Message(BaseModel):
     role: str
-    content: Union[str, List[Union[dict, ImageContent, TextContent]]]
+    content: Any  # str, list, dict 등 모든 형식 허용
 
 
 class ChatRequest(BaseModel):
