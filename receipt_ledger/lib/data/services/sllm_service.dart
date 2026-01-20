@@ -62,24 +62,19 @@ class SllmService {
   Future<ReceiptData> _parseWithExternalLlama(Uint8List imageBytes, String serverUrl) async {
     final base64Image = base64Encode(imageBytes);
     
-    final prompt = """이 영수증 이미지를 분석하여 JSON 형식으로 정리해주세요.
+    final prompt = """영수증을 분석해주세요.
 
-필드 설명:
-- store_name: 상호명
-- date: 날짜 (YYYY-MM-DD 형식)
-- total_amount: 총 결제 금액 (정수, 원 단위)
-- category: 카테고리
-- is_income: 수입 여부 (기본값 false)
-- items: 품목 리스트 [{name, quantity, unit_price, total_price}]
+## 분석 단계 (순서대로)
+1️⃣ 상호명 확인: 약국→의료, 카페→카페, 편의점→편의점, 마트→마트, 주유소→교통, 병원→의료, 식당→식비
+2️⃣ 품목 확인: 약→의료, 커피→카페, 음식→식비, 주유→교통
+3️⃣ 상호+품목 종합하여 카테고리 결정
 
-⚠️ 중요: 대부분의 영수증은 지출입니다!
-- 기본값: is_income: false
-- 오직 "급여명세서", "월급" 문서만 is_income: true
+## JSON 형식
+{"store_name":"상호명","date":"YYYY-MM-DD","total_amount":금액,"category":"카테고리","is_income":false,"items":[{"name":"품목","quantity":수량,"unit_price":단가,"total_price":금액}]}
 
-⚠️ 카테고리 (거의 모든 영수증은 지출):
-식비, 카페, 편의점, 마트, 교통, 쇼핑, 의료, 생활, 문화, 기타
+## 카테고리: 의료, 카페, 편의점, 마트, 식비, 교통, 쇼핑, 생활, 문화, 기타
 
-JSON만 반환하세요.""";
+JSON만 반환.""";
 
     final response = await _dio.post(
       '$serverUrl/v1/chat/completions',
