@@ -6,6 +6,7 @@ Receipt OCR Module - Single Vision LLM Pipeline
 import io
 import json
 import base64
+import os
 import requests
 from typing import Optional, Any, Dict
 from PIL import Image, ImageFile
@@ -15,18 +16,52 @@ ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 # ============== 서버 설정 ==============
 # llama.cpp Vision LLM 서버 (OpenAI 호환 API)
-VISION_SERVER_URL = "http://183.96.3.137:408/v1/chat/completions"
+# 환경변수로 오버라이드 가능: VISION_SERVER_URL
+
+# 서버 목록 (우선순위대로 시도)
+VISION_SERVERS = [
+    "http://localhost:408/v1/chat/completions",        # 로컬 데스크탑
+    "http://127.0.0.1:408/v1/chat/completions",        # 로컬 대체
+    "http://183.96.3.137:408/v1/chat/completions",     # 라즈베리파이 (원격)
+]
+
+# 환경변수 우선
+VISION_SERVER_URL = os.environ.get("VISION_SERVER_URL", None)
 MODEL_NAME = "gpt-4-vision-preview"  # llama.cpp에서는 무시됨
 
 # 타임아웃 설정 (초)
 REQUEST_TIMEOUT = 300
+HEALTH_CHECK_TIMEOUT = 3  # 서버 감지용
+
+
+def get_available_server() -> str:
+    """사용 가능한 llama.cpp 서버 찾기"""
+    # 환경변수로 지정된 경우
+    if VISION_SERVER_URL:
+        return VISION_SERVER_URL
+    
+    # 서버 목록에서 첫 번째 사용 가능한 서버 찾기
+    for server_url in VISION_SERVERS:
+        try:
+            health_url = server_url.replace("/v1/chat/completions", "/health")
+            response = requests.get(health_url, timeout=HEALTH_CHECK_TIMEOUT)
+            if response.status_code == 200:
+                print(f"[OCR] 서버 감지: {server_url}")
+                return server_url
+        except:
+            continue
+    
+    # 기본값 반환 (원격 서버)
+    print("[OCR] 로컬 서버 없음, 원격 서버 사용")
+    return VISION_SERVERS[-1]
 
 
 class ReceiptOCR:
     """단일 Vision LLM 파이프라인 클라이언트"""
     
-    def __init__(self, use_gpu: bool = False, lang: str = 'korean'):
+    def __init__(self, use_gpu: bool = False, lang: str = 'korean', server_url: str = None):
         self.lang = lang
+        self.server_url = server_url or get_available_server()
         
     def process_image(self, image_data: bytes) -> Dict[str, Any]:
         """
@@ -100,8 +135,8 @@ JSON만 응답해주세요."""
                 "max_tokens": 2048,
             }
             
-            print(f"[OCR] Vision LLM 요청 중... ({VISION_SERVER_URL})")
-            response = requests.post(VISION_SERVER_URL, json=payload, timeout=REQUEST_TIMEOUT)
+            print(f"[OCR] Vision LLM 요청 중... ({self.server_url})")
+            response = requests.post(self.server_url, json=payload, timeout=REQUEST_TIMEOUT)
             
             if response.status_code != 200:
                 raise RuntimeError(f"서버 오류: {response.text}")
