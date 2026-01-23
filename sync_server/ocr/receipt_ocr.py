@@ -14,9 +14,9 @@ from PIL import Image, ImageFile
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 # ============== 서버 설정 ==============
-# Vision LLM 서버 (이미지 -> JSON 한 번에)
+# llama.cpp Vision LLM 서버 (OpenAI 호환 API)
 VISION_SERVER_URL = "http://183.96.3.137:408/v1/chat/completions"
-MODEL_NAME = "user-model"
+MODEL_NAME = "gpt-4-vision-preview"  # llama.cpp에서는 무시됨
 
 # 타임아웃 설정 (초)
 REQUEST_TIMEOUT = 300
