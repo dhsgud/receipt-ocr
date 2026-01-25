@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Optional, List, Dict, Any
 from contextlib import contextmanager
 
-from fastapi import FastAPI, HTTPException, UploadFile, File, Form
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
@@ -454,7 +454,12 @@ async def get_changes_since(since: Optional[str] = None):
 
 
 @app.post("/api/sync")
-async def sync_transactions(request: SyncRequest):
+async def sync_transactions(
+    request: SyncRequest,
+    owner_key: str = Header(None, alias="X-Owner-Key"),
+    partner_key: str = Header(None, alias="X-Partner-Key")
+):
+    """Full sync with partner-based filtering"""
     server_time = datetime.now().isoformat()
     uploaded_count = 0
     
@@ -485,13 +490,29 @@ async def sync_transactions(request: SyncRequest):
         
         conn.commit()
         
-        if request.lastSyncTime:
-            cursor = conn.execute(
-                "SELECT * FROM transactions WHERE serverUpdatedAt > ?",
-                (request.lastSyncTime,)
-            )
+        # Build list of allowed owner keys (self + partner)
+        allowed_keys = []
+        if owner_key:
+            allowed_keys.append(owner_key)
+        if partner_key:
+            allowed_keys.append(partner_key)
+        
+        # Get transactions filtered by owner/partner keys
+        if allowed_keys:
+            placeholders = ",".join("?" * len(allowed_keys))
+            if request.lastSyncTime:
+                cursor = conn.execute(
+                    f"SELECT * FROM transactions WHERE ownerKey IN ({placeholders}) AND serverUpdatedAt > ?",
+                    (*allowed_keys, request.lastSyncTime)
+                )
+            else:
+                cursor = conn.execute(
+                    f"SELECT * FROM transactions WHERE ownerKey IN ({placeholders})",
+                    tuple(allowed_keys)
+                )
         else:
-            cursor = conn.execute("SELECT * FROM transactions")
+            # No keys provided - return empty for security
+            cursor = conn.execute("SELECT * FROM transactions WHERE 1=0")
         
         rows = cursor.fetchall()
         downloaded = [row_to_transaction(row) for row in rows]
