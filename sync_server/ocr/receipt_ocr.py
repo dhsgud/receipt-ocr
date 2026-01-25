@@ -171,6 +171,61 @@ JSON만 응답해주세요."""
             base64_image = base64_image.split(',')[1]
         image_data = base64.b64decode(base64_image)
         return self.process_image(image_data)
+    
+    def extract_raw_text(self, image_data: bytes) -> str:
+        """
+        이미지에서 Raw 텍스트만 추출 (하이브리드 파이프라인용)
+        모바일 LFM에서 구조화할 수 있도록 원본 텍스트만 반환
+        """
+        try:
+            # 이미지 로드 및 Base64 인코딩
+            image = Image.open(io.BytesIO(image_data))
+            buffered = io.BytesIO()
+            image.save(buffered, format="JPEG")
+            img_str = base64.b64encode(buffered.getvalue()).decode('utf-8')
+            
+            # 간단한 OCR 프롬프트 - 텍스트만 추출
+            prompt = """이 영수증 이미지의 모든 텍스트를 그대로 읽어주세요.
+상호명, 날짜, 품목명, 수량, 가격, 합계 등 보이는 모든 텍스트를 줄바꿈으로 구분하여 출력해주세요.
+별도의 분석이나 구조화 없이 텍스트만 추출해주세요."""
+
+            payload = {
+                "model": MODEL_NAME,
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": prompt},
+                            {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_str}"}}
+                        ]
+                    }
+                ],
+                "temperature": 0.1,
+                "max_tokens": 2048,
+            }
+            
+            print(f"[OCR] Raw 텍스트 추출 중... ({self.server_url})")
+            response = requests.post(self.server_url, json=payload, timeout=REQUEST_TIMEOUT)
+            
+            if response.status_code != 200:
+                raise RuntimeError(f"서버 오류: {response.text}")
+                
+            result = response.json()
+            content = result['choices'][0]['message']['content']
+            
+            print(f"[OCR] Raw 텍스트 추출 완료")
+            return content.strip()
+            
+        except Exception as e:
+            print(f"[OCR 오류] {str(e)}")
+            raise RuntimeError(f"텍스트 추출 실패: {str(e)}")
+    
+    def extract_raw_text_base64(self, base64_image: str) -> str:
+        """Base64 이미지에서 Raw 텍스트 추출"""
+        if ',' in base64_image:
+            base64_image = base64_image.split(',')[1]
+        image_data = base64.b64decode(base64_image)
+        return self.extract_raw_text(image_data)
 
 
 def preprocess_receipt_image(image_data: bytes) -> bytes:

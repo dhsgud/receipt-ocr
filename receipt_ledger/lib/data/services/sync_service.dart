@@ -127,8 +127,17 @@ class SyncService {
         }
       }
 
-      // Send sync request
-      final response = await _dio.post('/api/sync', data: requestData);
+      // Send sync request with owner and partner keys
+      final response = await _dio.post(
+        '/api/sync', 
+        data: requestData,
+        options: Options(
+          headers: {
+            'X-Owner-Key': _myKey ?? '',
+            'X-Partner-Key': _partnerKey ?? '',
+          },
+        ),
+      );
 
       if (response.statusCode == 200) {
         final data = response.data;

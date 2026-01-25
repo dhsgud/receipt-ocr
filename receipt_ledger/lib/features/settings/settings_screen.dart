@@ -716,6 +716,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   Icons.phone_android,
                   '오프라인 (모델 로드 필요)',
                 ),
+
             ],
           ),
           const SizedBox(height: 8),
@@ -823,6 +824,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       ),
     );
   }
+
 
   Widget _buildInfoRow(String label, String value) {
     return Row(

@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 import '../../data/services/local_ocr_service.dart';
@@ -19,6 +20,7 @@ class ModelDownloadState {
   final bool isModelReady;      // 모델 파일 존재 여부
   final bool isModelLoaded;     // 모델이 메모리에 로드됨
   final bool isModelLoading;    // 모델 로딩 중
+  final bool isWebPlatform;     // 웹 플랫폼 여부
 
   ModelDownloadState({
     this.isDownloading = false,
@@ -27,6 +29,7 @@ class ModelDownloadState {
     this.isModelReady = false,
     this.isModelLoaded = false,
     this.isModelLoading = false,
+    this.isWebPlatform = false,
   });
 
   ModelDownloadState copyWith({
@@ -36,6 +39,7 @@ class ModelDownloadState {
     bool? isModelReady,
     bool? isModelLoaded,
     bool? isModelLoading,
+    bool? isWebPlatform,
   }) {
     return ModelDownloadState(
       isDownloading: isDownloading ?? this.isDownloading,
@@ -44,6 +48,7 @@ class ModelDownloadState {
       isModelReady: isModelReady ?? this.isModelReady,
       isModelLoaded: isModelLoaded ?? this.isModelLoaded,
       isModelLoading: isModelLoading ?? this.isModelLoading,
+      isWebPlatform: isWebPlatform ?? this.isWebPlatform,
     );
   }
 }
@@ -54,8 +59,11 @@ final localModelManagerProvider = StateNotifierProvider<LocalModelManager, Model
 });
 
 class LocalModelManager extends StateNotifier<ModelDownloadState> {
-  LocalModelManager() : super(ModelDownloadState()) {
-    _checkModelExists();
+  LocalModelManager() : super(ModelDownloadState(isWebPlatform: kIsWeb)) {
+    // 웹에서는 로컬 모델 기능을 사용할 수 없음
+    if (!kIsWeb) {
+      _checkModelExists();
+    }
   }
 
   // LocalOcrService 인스턴스
