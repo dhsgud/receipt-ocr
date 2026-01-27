@@ -137,14 +137,18 @@ JSON 형식만 응답하세요."""
                     }
                 }
                 
-                res = requests.post(f"{GEMINI_API_URL}?key={api_key}", json=payload, timeout=30)
+                res = requests.post(f"{GEMINI_API_URL}?key={api_key}", json=payload, timeout=60)
                 if res.status_code == 200:
                     try:
                         txt = res.json()['candidates'][0]['content']['parts'][0]['text']
                         return json.loads(txt)
-                    except:
+                    except Exception as e:
+                        print(f"[OCR] Gemini Parsing Error: {e}, Response: {res.text[:100]}...")
                         continue
-            except:
+                else:
+                    print(f"[OCR] Gemini API Error: {res.status_code} - {res.text}")
+            except Exception as e:
+                print(f"[OCR] Gemini Connection Error: {e}")
                 continue
         return None
 
@@ -175,7 +179,9 @@ JSON 형식만 응답하세요."""
         }
         
         try:
-            res = requests.post(self.local_server_url, json=payload, timeout=120) # 로컬 Inference는 느릴 수 있음
+        try:
+            # 로컬 Inference는 느릴 수 있음 (120s -> 300s)
+            res = requests.post(self.local_server_url, json=payload, timeout=300) 
             if res.status_code == 200:
                 content = res.json()['choices'][0]['message']['content']
                 print(f"[OCR] Local extracted {len(content)} chars")

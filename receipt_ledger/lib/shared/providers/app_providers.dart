@@ -121,7 +121,7 @@ enum OcrMode {
 
 /// OCR 모드 provider (기본값: auto)
 final ocrModeProvider = StateProvider<OcrMode>((ref) {
-  return OcrMode.auto;
+  return OcrMode.server; // Default to our Python Hybrid Server
 });
 
 /// 외부 llama.cpp 서버 URL (설정에서 변경 가능)
