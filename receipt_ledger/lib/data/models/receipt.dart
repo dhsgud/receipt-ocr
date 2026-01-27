@@ -24,6 +24,19 @@ class ReceiptData {
     return category != null && incomeCategories.contains(category);
   }
 
+  /// 금액 문자열을 숫자로 변환 (쉼표, 공백 등 처리)
+  static double? _parseAmount(dynamic value) {
+    if (value == null) return null;
+    if (value is num) return value.toDouble();
+    if (value is String) {
+      // 쉼표, 공백, 원화 기호 제거
+      final cleaned = value.replaceAll(RegExp(r'[,\s₩원]'), '');
+      if (cleaned.isEmpty) return null;
+      return double.tryParse(cleaned);
+    }
+    return null;
+  }
+
   factory ReceiptData.fromSllmResponse(Map<String, dynamic> json) {
     // Parse SLLM response - adjust based on actual SLLM API format
     final items = (json['items'] as List<dynamic>?)
@@ -48,9 +61,9 @@ class ReceiptData {
     return ReceiptData(
       storeName: json['store_name'] as String? ?? json['storeName'] as String?,
       date: parsedDate,
-      totalAmount: (json['total_amount'] as num?)?.toDouble() ?? 
-                   (json['totalAmount'] as num?)?.toDouble() ??
-                   (json['total'] as num?)?.toDouble(),
+      totalAmount: _parseAmount(json['total_amount']) ?? 
+                   _parseAmount(json['totalAmount']) ??
+                   _parseAmount(json['total']),
       items: items,
       rawText: json['raw_text'] as String? ?? json['rawText'] as String?,
       category: category,
@@ -102,11 +115,11 @@ class ReceiptItem {
     return ReceiptItem(
       name: map['name'] as String? ?? map['item_name'] as String? ?? '',
       quantity: (map['quantity'] as num?)?.toInt() ?? 1,
-      unitPrice: (map['unit_price'] as num?)?.toDouble() ?? 
-                 (map['unitPrice'] as num?)?.toDouble() ?? 0,
-      totalPrice: (map['total_price'] as num?)?.toDouble() ?? 
-                  (map['totalPrice'] as num?)?.toDouble() ?? 
-                  (map['price'] as num?)?.toDouble() ?? 0,
+      unitPrice: ReceiptData._parseAmount(map['unit_price']) ?? 
+                 ReceiptData._parseAmount(map['unitPrice']) ?? 0,
+      totalPrice: ReceiptData._parseAmount(map['total_price']) ?? 
+                  ReceiptData._parseAmount(map['totalPrice']) ?? 
+                  ReceiptData._parseAmount(map['price']) ?? 0,
     );
   }
 
