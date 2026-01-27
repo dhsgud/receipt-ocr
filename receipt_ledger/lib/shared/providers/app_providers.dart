@@ -134,6 +134,12 @@ final ocrServerUrlProvider = StateProvider<String>((ref) {
   return 'http://183.96.3.137:9999';
 });
 
+/// OCR 제공자 (Server Mode일 때 사용)
+/// 'auto' (Hybrid), 'gemini', 'gpt', 'claude', 'grok'
+final ocrProviderProvider = StateProvider<String>((ref) {
+  return 'auto'; 
+});
+
 // ============================================================================
 // 캘린더 연동 관련 Providers
 // ============================================================================

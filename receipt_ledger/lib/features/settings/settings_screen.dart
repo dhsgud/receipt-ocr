@@ -746,6 +746,46 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   '오프라인 (모델 로드 필요)',
                 ),
 
+              // OCR Provider Selector (Visible only when Server Mode is active/selected)
+              if (ocrMode == OcrMode.server) ...[
+                const SizedBox(height: 12),
+                const Divider(),
+                const Text(
+                  'OCR 엔진 선택 (Python Server)',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                ),
+                const SizedBox(height: 8),
+                Consumer(
+                  builder: (context, ref, _) {
+                    final provider = ref.watch(ocrProviderProvider);
+                    return DropdownButtonFormField<String>(
+                      value: provider,
+                      decoration: const InputDecoration(
+                        border: OutlineInputBorder(),
+                        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      ),
+                      items: const [
+                        DropdownMenuItem(value: 'auto', child: Text('🤖 Hybrid (Local + Gemini) - 추천')),
+                        DropdownMenuItem(value: 'gemini', child: Text('✨ Gemini Only (Fast)')),
+                        DropdownMenuItem(value: 'gpt', child: Text('🧠 GPT-4o (OpenAI)')),
+                        DropdownMenuItem(value: 'claude', child: Text('🎭 Claude 3.5 Sonnet')),
+                        DropdownMenuItem(value: 'grok', child: Text('🌌 Grok (xAI)')),
+                      ],
+                      onChanged: (value) {
+                        if (value != null) {
+                          ref.read(ocrProviderProvider.notifier).state = value;
+                        }
+                      },
+                    );
+                  },
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  '* Hybrid: 로컬(LightOnOCR)로 텍스트 추출 후 Gemini로 정리 (가장 경제적)\n* 그 외: 클라우드 Vision API 직접 호출 (API 요금 발생 가능)',
+                  style: TextStyle(fontSize: 11, color: Colors.grey),
+                ),
+              ],
+
             ],
           ),
           const SizedBox(height: 8),

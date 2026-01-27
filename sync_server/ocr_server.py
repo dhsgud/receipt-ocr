@@ -63,6 +63,7 @@ class OCRRequest(BaseModel):
     """Base64 이미지 OCR 요청"""
     image: str  # Base64 encoded image
     preprocess: bool = True  # 이미지 전처리 여부
+    provider: str = 'auto'  # 'auto', 'gemini', 'gpt', 'claude', 'grok'
 
 
 class ReceiptItem(BaseModel):
@@ -183,9 +184,9 @@ async def process_receipt_ocr(request: OCRRequest):
             image_bytes = preprocess_receipt_image(image_bytes)
             print(f"[OCR] Preprocessed: {len(image_bytes)} bytes")
         
-        # OCR 실행 (Llama.cpp)
+        # OCR 실행 (Llama.cpp / Providers)
         ocr = get_ocr_engine()
-        result = ocr.process_image(image_bytes)
+        result = ocr.process_image_v2(image_bytes, provider=request.provider)
         print(f"[OCR] Result: {result}")
         
         # 처리 시간 계산

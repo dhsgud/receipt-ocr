@@ -13,6 +13,9 @@ import random
 import time
 from typing import Optional, Any, Dict
 from PIL import Image, ImageFile
+from openai import OpenAI
+from anthropic import Anthropic
+
 
 # 손상된/불완전한 이미지 로드 허용
 ImageFile.LOAD_TRUNCATED_IMAGES = True
@@ -51,6 +54,12 @@ class ReceiptOCR:
             self.gemini_keys.append(os.environ.get("GEMINI_API_KEY_1"))
         if os.environ.get("GEMINI_API_KEY_2"):
             self.gemini_keys.append(os.environ.get("GEMINI_API_KEY_2"))
+
+        # Other Clients (Initialized on demand)
+        self.openai_client = None
+        self.anthropic_client = None
+        self.xai_client = None
+
 
     def _find_available_server(self) -> str:
         """사용 가능한 로컬 서버 찾기"""
@@ -239,6 +248,137 @@ JSON 형식만 응답하세요."""
             return vision_result
             
         raise RuntimeError("All OCR pipelines failed")
+
+    def process_image_v2(self, image_data: bytes, provider: str = 'auto') -> Dict[str, Any]:
+        """
+        Provider-aware OCR processing.
+        Providers: 'auto' (Hybrid), 'gemini', 'gpt', 'claude', 'grok'
+        """
+        image_base64 = base64.b64encode(image_data).decode('utf-8')
+        
+        print(f"[OCR] Processing with provider: {provider}")
+
+        # 1. Direct Cloud Providers
+        if provider == 'gpt':
+            return self._call_gpt_vision(image_base64)
+        elif provider == 'claude':
+            return self._call_claude_vision(image_base64)
+        elif provider == 'grok':
+            return self._call_grok_vision(image_base64)
+        elif provider == 'gemini':
+            # Direct Gemini Vision (Bypass Local)
+            res = self._call_gemini_vision(image_base64)
+            if not res:
+                raise RuntimeError("Gemini Vision failed")
+            return res
+            
+        # 2. Auto / Hybrid Mode (Default)
+        return self.process_image(image_data)
+
+    def _call_gpt_vision(self, image_base64: str) -> Dict[str, Any]:
+        """OpenAI GPT-4o Vision"""
+        api_key = os.environ.get("OPENAI_API_KEY")
+        if not api_key:
+            raise ValueError("OPENAI_API_KEY not found")
+            
+        if not self.openai_client:
+            self.openai_client = OpenAI(api_key=api_key)
+            
+        response = self.openai_client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": "Extract receipt info as JSON: {store_name, date, total_amount, items[{name, quantity, unit_price, total_price}], category, is_income}. Return ONLY JSON."},
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:image/jpeg;base64,{image_base64}"
+                            }
+                        }
+                    ]
+                }
+            ],
+            response_format={"type": "json_object"},
+            max_tokens=1000,
+        )
+        return json.loads(response.choices[0].message.content)
+
+    def _call_claude_vision(self, image_base64: str) -> Dict[str, Any]:
+        """Anthropic Claude 3.5 Sonnet"""
+        api_key = os.environ.get("ANTHROPIC_API_KEY")
+        if not api_key:
+            raise ValueError("ANTHROPIC_API_KEY not found")
+            
+        if not self.anthropic_client:
+            self.anthropic_client = Anthropic(api_key=api_key)
+            
+        message = self.anthropic_client.messages.create(
+            model="claude-3-5-sonnet-20240620",
+            max_tokens=1024,
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "image",
+                            "source": {
+                                "type": "base64",
+                                "media_type": "image/jpeg",
+                                "data": image_base64,
+                            },
+                        },
+                        {
+                            "type": "text",
+                            "text": "Extract receipt data into JSON format: {store_name, date(YYYY-MM-DD), total_amount(int), items[{name, quantity, unit_price, total_price}], category, is_income(bool)}. Return only JSON."
+                        }
+                    ],
+                }
+            ]
+        )
+        # Claude doesn't enforce JSON mode strictly, manual cleanup might be needed
+        # but 3.5 Sonnet is usually good.
+        text = message.content[0].text
+        start = text.find('{')
+        end = text.rfind('}') + 1
+        return json.loads(text[start:end])
+
+    def _call_grok_vision(self, image_base64: str) -> Dict[str, Any]:
+        """xAI Grok Vision (OpenAI Compatible)"""
+        api_key = os.environ.get("XAI_API_KEY")
+        if not api_key:
+            raise ValueError("XAI_API_KEY not found")
+            
+        if not self.xai_client:
+            self.xai_client = OpenAI(
+                api_key=api_key,
+                base_url="https://api.x.ai/v1",
+            )
+            
+        response = self.xai_client.chat.completions.create(
+            model="grok-vision-beta",
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": "Extract receipt info as JSON: {store_name, date, total_amount, items, category}. JSON only."},
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:image/jpeg;base64,{image_base64}"
+                            }
+                        }
+                    ]
+                }
+            ],
+            stream=False,
+        )
+        text = response.choices[0].message.content
+        start = text.find('{')
+        end = text.rfind('}') + 1
+        return json.loads(text[start:end])
+
 
     def process_base64(self, base64_image: str) -> Dict[str, Any]:
         if ',' in base64_image:

@@ -188,6 +188,7 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
           mode: effectiveMode,
           externalLlamaUrl: externalLlamaUrl,
           ocrServerUrl: ocrServerUrl,
+          provider: ref.read(ocrProviderProvider),
         );
       }
 

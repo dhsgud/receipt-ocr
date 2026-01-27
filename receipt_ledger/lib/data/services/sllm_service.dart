@@ -20,6 +20,7 @@ class SllmService {
     required String mode,  // 'externalLlama', 'server', 'local', 'auto'
     String? externalLlamaUrl,
     String? ocrServerUrl,
+    String? provider, // 'auto', 'gemini', 'gpt', 'claude', 'grok' (Only used when mode='server')
   }) async {
     try {
       switch (mode) {
@@ -32,6 +33,7 @@ class SllmService {
           return await _parseWithOcrServer(
             imageBytes, 
             ocrServerUrl ?? 'http://183.96.3.137:9999',
+            provider: provider ?? 'auto',
           );
         case 'local':
           throw Exception('로컬 OCR은 LocalOcrService를 사용하세요');
@@ -107,7 +109,7 @@ JSON만 반환.""";
   }
 
   /// 내부 OCR 서버로 요청 (Python FastAPI)
-  Future<ReceiptData> _parseWithOcrServer(Uint8List imageBytes, String serverUrl) async {
+  Future<ReceiptData> _parseWithOcrServer(Uint8List imageBytes, String serverUrl, {String provider = 'auto'}) async {
     final base64Image = base64Encode(imageBytes);
     
     final response = await _dio.post(
@@ -115,6 +117,7 @@ JSON만 반환.""";
       data: {
         'image': 'data:image/jpeg;base64,$base64Image',
         'preprocess': true,
+        'provider': provider,
       },
     );
 
