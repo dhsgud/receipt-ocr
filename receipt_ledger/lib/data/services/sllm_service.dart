@@ -10,7 +10,7 @@ class SllmService {
 
   SllmService() : _dio = Dio(BaseOptions(
     connectTimeout: const Duration(seconds: 60),
-    receiveTimeout: const Duration(seconds: 300),
+    receiveTimeout: const Duration(seconds: 600), // Match server timeout
     headers: {'Content-Type': 'application/json'},
   ));
 
