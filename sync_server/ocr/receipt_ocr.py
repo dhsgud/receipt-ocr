@@ -217,6 +217,37 @@ JSON 형식만 응답하세요."""
             
         return None
 
+    def _normalize_response(self, result: Dict[str, Any]) -> Dict[str, Any]:
+        """OCR 결과 정규화: 문자열 금액을 숫자로 변환"""
+        def parse_amount(val):
+            if val is None:
+                return None
+            if isinstance(val, (int, float)):
+                return val
+            if isinstance(val, str):
+                # 쉼표, 공백, 원화 기호 제거
+                cleaned = val.replace(',', '').replace(' ', '').replace('₩', '').replace('원', '')
+                try:
+                    return int(cleaned) if cleaned.isdigit() else float(cleaned)
+                except:
+                    return None
+            return None
+        
+        # total_amount 정규화 (total 키도 확인)
+        total = parse_amount(result.get('total_amount')) or parse_amount(result.get('total'))
+        result['total_amount'] = total if total else 0
+        
+        # items 내 가격 정규화
+        if 'items' in result and isinstance(result['items'], list):
+            for item in result['items']:
+                if isinstance(item, dict):
+                    item['price'] = parse_amount(item.get('price')) or 0
+                    item['unit_price'] = parse_amount(item.get('unit_price')) or 0
+                    item['total_price'] = parse_amount(item.get('total_price')) or parse_amount(item.get('price')) or 0
+        
+        print(f"[OCR] Normalized result: total_amount={result.get('total_amount')}")
+        return result
+
     def process_image(self, image_data: bytes) -> Dict[str, Any]:
         """
         [New Pipeline]
@@ -235,7 +266,7 @@ JSON 형식만 응답하세요."""
                 json_result = self._call_gemini_text(raw_text)
                 if json_result:
                     print(f"[OCR] Pipeline Success (Local+Gemini) - {time.time()-start_time:.2f}s")
-                    return json_result
+                    return self._normalize_response(json_result)
                 else:
                     # Gemini Structuring Failed, but we have text. Return partial result.
                     print("[OCR] Warning: Gemini structuring failed (Rate Limit?), returning raw text result")
@@ -254,7 +285,7 @@ JSON 형식만 응답하세요."""
         print("[OCR] Fallback to Gemini Vision API...")
         vision_result = self._call_gemini_vision(image_base64)
         if vision_result:
-            return vision_result
+            return self._normalize_response(vision_result)
             
         raise RuntimeError("All OCR pipelines failed")
 
@@ -269,17 +300,17 @@ JSON 형식만 응답하세요."""
 
         # 1. Direct Cloud Providers
         if provider == 'gpt':
-            return self._call_gpt_vision(image_base64)
+            return self._normalize_response(self._call_gpt_vision(image_base64))
         elif provider == 'claude':
-            return self._call_claude_vision(image_base64)
+            return self._normalize_response(self._call_claude_vision(image_base64))
         elif provider == 'grok':
-            return self._call_grok_vision(image_base64)
+            return self._normalize_response(self._call_grok_vision(image_base64))
         elif provider == 'gemini':
             # Direct Gemini Vision (Bypass Local)
             res = self._call_gemini_vision(image_base64)
             if not res:
                 raise RuntimeError("Gemini Vision failed")
-            return res
+            return self._normalize_response(res)
             
         # 2. Auto / Hybrid Mode (Default)
         return self.process_image(image_data)
