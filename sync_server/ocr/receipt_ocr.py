@@ -222,3 +222,29 @@ JSON 형식만 응답하세요."""
             base64_image = base64_image.split(',')[1]
         image_data = base64.b64decode(base64_image)
         return self.process_image(image_data)
+
+def preprocess_receipt_image(image_data: bytes) -> bytes:
+    """영수증 이미지 전처리 (리사이징 및 포맷 변환)"""
+    try:
+        image = Image.open(io.BytesIO(image_data))
+        
+        # RGBA -> RGB 변환
+        if image.mode in ('RGBA', 'P'):
+            image = image.convert('RGB')
+            
+        # 최대 크기 제한 (2048px)
+        max_size = 2048
+        if max(image.size) > max_size:
+            ratio = max_size / max(image.size)
+            new_size = (int(image.size[0] * ratio), int(image.size[1] * ratio))
+            image = image.resize(new_size, Image.Resampling.LANCZOS)
+            
+        # JPEG로 변환
+        output = io.BytesIO()
+        image.save(output, format='JPEG', quality=85)
+        return output.getvalue()
+        
+    except Exception as e:
+        print(f"[Preprocess] Error: {e}")
+        return image_data
+
