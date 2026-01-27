@@ -12,9 +12,18 @@ import requests
 import random
 import time
 from typing import Optional, Any, Dict
+from typing import Optional, Any, Dict
 from PIL import Image, ImageFile
-from openai import OpenAI
-from anthropic import Anthropic
+
+try:
+    from openai import OpenAI
+except ImportError:
+    OpenAI = None
+
+try:
+    from anthropic import Anthropic
+except ImportError:
+    Anthropic = None
 
 
 # 손상된/불완전한 이미지 로드 허용
@@ -277,6 +286,9 @@ JSON 형식만 응답하세요."""
 
     def _call_gpt_vision(self, image_base64: str) -> Dict[str, Any]:
         """OpenAI GPT-4o Vision"""
+        if OpenAI is None:
+            raise ImportError("openai package not installed. Run 'pip install openai'")
+            
         api_key = os.environ.get("OPENAI_API_KEY")
         if not api_key:
             raise ValueError("OPENAI_API_KEY not found")
@@ -307,6 +319,9 @@ JSON 형식만 응답하세요."""
 
     def _call_claude_vision(self, image_base64: str) -> Dict[str, Any]:
         """Anthropic Claude 3.5 Sonnet"""
+        if Anthropic is None:
+            raise ImportError("anthropic package not installed. Run 'pip install anthropic'")
+
         api_key = os.environ.get("ANTHROPIC_API_KEY")
         if not api_key:
             raise ValueError("ANTHROPIC_API_KEY not found")
@@ -346,6 +361,9 @@ JSON 형식만 응답하세요."""
 
     def _call_grok_vision(self, image_base64: str) -> Dict[str, Any]:
         """xAI Grok Vision (OpenAI Compatible)"""
+        if OpenAI is None:
+            raise ImportError("openai package not installed. Run 'pip install openai'")
+
         api_key = os.environ.get("XAI_API_KEY")
         if not api_key:
             raise ValueError("XAI_API_KEY not found")
