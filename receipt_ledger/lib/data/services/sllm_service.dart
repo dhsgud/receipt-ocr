@@ -15,12 +15,14 @@ class SllmService {
   ));
 
   /// OCR 모드에 따라 적절한 서버로 요청
+  /// [cancelToken]을 전달하면 요청을 취소할 수 있음
   Future<ReceiptData> parseReceiptFromBytes(
     Uint8List imageBytes, {
     required String mode,  // 'externalLlama', 'server', 'local', 'auto'
     String? externalLlamaUrl,
     String? ocrServerUrl,
     String? provider, // 'auto', 'gemini', 'gpt', 'claude', 'grok' (Only used when mode='server')
+    CancelToken? cancelToken,
   }) async {
     try {
       switch (mode) {
@@ -28,12 +30,14 @@ class SllmService {
           return await _parseWithExternalLlama(
             imageBytes, 
             externalLlamaUrl ?? 'http://183.96.3.137:408',
+            cancelToken: cancelToken,
           );
         case 'server':
           return await _parseWithOcrServer(
             imageBytes, 
             ocrServerUrl ?? 'http://183.96.3.137:9999',
             provider: provider ?? 'auto',
+            cancelToken: cancelToken,
           );
         case 'local':
           throw Exception('로컬 OCR은 LocalOcrService를 사용하세요');
@@ -44,16 +48,24 @@ class SllmService {
             return await _parseWithExternalLlama(
               imageBytes, 
               externalLlamaUrl ?? 'http://183.96.3.137:408',
+              cancelToken: cancelToken,
             );
           } catch (e) {
+            if (e is DioException && e.type == DioExceptionType.cancel) {
+              rethrow; // 취소된 경우 재시도하지 않음
+            }
             debugPrint('[SllmService] External llama failed: $e, trying OCR server');
             return await _parseWithOcrServer(
               imageBytes, 
               ocrServerUrl ?? 'http://183.96.3.137:9999',
+              cancelToken: cancelToken,
             );
           }
       }
     } on DioException catch (e) {
+      if (e.type == DioExceptionType.cancel) {
+        throw Exception('요청이 취소되었습니다');
+      }
       throw Exception(_getDioErrorMessage(e));
     } catch (e) {
       throw Exception('영수증 분석 실패: $e');
@@ -61,7 +73,7 @@ class SllmService {
   }
 
   /// 외부 llama.cpp 서버로 직접 요청 (Vision 모델)
-  Future<ReceiptData> _parseWithExternalLlama(Uint8List imageBytes, String serverUrl) async {
+  Future<ReceiptData> _parseWithExternalLlama(Uint8List imageBytes, String serverUrl, {CancelToken? cancelToken}) async {
     final base64Image = base64Encode(imageBytes);
     
     final prompt = """영수증을 분석해주세요.
@@ -97,6 +109,7 @@ JSON만 반환.""";
         'temperature': 0.1,
         'max_tokens': 1024,
       },
+      cancelToken: cancelToken,
     );
 
     if (response.statusCode == 200) {
@@ -109,7 +122,7 @@ JSON만 반환.""";
   }
 
   /// 내부 OCR 서버로 요청 (Python FastAPI)
-  Future<ReceiptData> _parseWithOcrServer(Uint8List imageBytes, String serverUrl, {String provider = 'auto'}) async {
+  Future<ReceiptData> _parseWithOcrServer(Uint8List imageBytes, String serverUrl, {String provider = 'auto', CancelToken? cancelToken}) async {
     final base64Image = base64Encode(imageBytes);
     
     final response = await _dio.post(
@@ -119,6 +132,7 @@ JSON만 반환.""";
         'preprocess': true,
         'provider': provider,
       },
+      cancelToken: cancelToken,
     );
 
     if (response.statusCode == 200) {

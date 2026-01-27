@@ -1,4 +1,5 @@
 import 'dart:typed_data';
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
@@ -86,6 +87,9 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
   bool _isBatchMode = false;
   bool _isBatchProcessing = false;
 
+  // OCR 요청 취소용 토큰
+  CancelToken? _ocrCancelToken;
+
   // Form controllers
   final _descriptionController = TextEditingController();
   final _amountController = TextEditingController();
@@ -95,6 +99,7 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
 
   @override
   void dispose() {
+    _ocrCancelToken?.cancel('Screen disposed');
     _descriptionController.dispose();
     _amountController.dispose();
     super.dispose();
@@ -130,6 +135,10 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
 
   Future<void> _processReceipt() async {
     if (_imageBytes == null) return;
+
+    // 새 CancelToken 생성
+    _ocrCancelToken?.cancel('New request started');
+    _ocrCancelToken = CancelToken();
 
     setState(() {
       _isProcessing = true;
@@ -189,8 +198,11 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
           externalLlamaUrl: externalLlamaUrl,
           ocrServerUrl: ocrServerUrl,
           provider: ref.read(ocrProviderProvider),
+          cancelToken: _ocrCancelToken,
         );
       }
+
+      if (!mounted) return;
 
       setState(() {
         _receiptData = receiptData;
@@ -217,11 +229,30 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
         // 수입 여부 자동 설정
         _isIncome = receiptData.isIncome;
       });
+    } on DioException catch (e) {
+      if (e.type == DioExceptionType.cancel) {
+        debugPrint('[OCR] Request cancelled by user');
+        // 취소된 경우 에러 메시지 표시하지 않음
+        if (mounted) {
+          setState(() {
+            _isProcessing = false;
+          });
+        }
+        return;
+      }
+      if (mounted) {
+        setState(() {
+          _isProcessing = false;
+          _errorMessage = e.message ?? '서버 요청 실패';
+        });
+      }
     } catch (e) {
-      setState(() {
-        _isProcessing = false;
-        _errorMessage = e.toString();
-      });
+      if (mounted) {
+        setState(() {
+          _isProcessing = false;
+          _errorMessage = e.toString();
+        });
+      }
     }
   }
 
@@ -502,11 +533,16 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
     );
 
     if (shouldCancel == true && mounted) {
+      // 진행 중인 OCR 요청 취소
+      _ocrCancelToken?.cancel('Cancelled by user');
+      _ocrCancelToken = null;
+      
       setState(() {
         _pickedFile = null;
         _imageBytes = null;
         _receiptData = null;
         _errorMessage = null;
+        _isProcessing = false;
       });
     }
   }
