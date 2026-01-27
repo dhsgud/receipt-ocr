@@ -12,6 +12,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 from contextlib import contextmanager
+from dotenv import load_dotenv
+
+load_dotenv() # Load environment variables
+
 
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Header
 from fastapi.middleware.cors import CORSMiddleware
