@@ -471,6 +471,46 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
       _isBatchProcessing = false;
     });
   }
+
+  /// 이미지 취소 확인 다이얼로그
+  Future<void> _showCancelConfirmDialog() async {
+    final shouldCancel = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.help_outline, color: AppColors.primary),
+            SizedBox(width: 8),
+            Text('이미지 취소'),
+          ],
+        ),
+        content: const Text('영수증 이미지 올리는 것을 취소하시겠습니까?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('계속 분석'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.expense,
+            ),
+            child: const Text('취소', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldCancel == true && mounted) {
+      setState(() {
+        _pickedFile = null;
+        _imageBytes = null;
+        _receiptData = null;
+        _errorMessage = null;
+      });
+    }
+  }
+
   Future<void> _saveTransaction() async {
     final amount = double.tryParse(_amountController.text);
     if (amount == null || amount <= 0) {
@@ -1259,13 +1299,7 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
             top: 8,
             right: 8,
             child: IconButton(
-              onPressed: () {
-                setState(() {
-                  _pickedFile = null;
-                  _imageBytes = null;
-                  _receiptData = null;
-                });
-              },
+              onPressed: () => _showCancelConfirmDialog(),
               icon: Container(
                 padding: const EdgeInsets.all(4),
                 decoration: const BoxDecoration(
