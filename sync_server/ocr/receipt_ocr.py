@@ -124,8 +124,29 @@ JSON만 응답하세요."""
         """Gemini에게 이미지 분석 요청 (Fallback)"""
         print("[OCR] Gemini Vision processing...")
         prompt = """영수증 이미지를 분석하여 JSON으로 정리해주세요.
-상호명, 날짜, 합계, 품목, 카테고리를 추출하세요.
-JSON 형식만 응답하세요."""
+
+## 추출 항목
+- store_name: 상호명
+- date: 날짜 (YYYY-MM-DD 형식)
+- total_amount: 합계 금액 (숫자만, 쉼표 없이)
+- category: 카테고리 (아래 규칙 참고)
+- is_income: 수입 여부 (true/false, 일반 영수증은 false)
+- items: 품목 목록 [{name, quantity, unit_price, total_price}]
+
+## 카테고리 판단 규칙
+1. 카페/커피숍/스타벅스/공차/이디야/투썸 → "카페"
+2. 편의점/CU/GS25/세븐일레븐/미니스톱 → "편의점"
+3. 마트/이마트/홈플러스/롯데마트/하나로마트 → "마트"
+4. 약국/병원/의원/메디/클리닉 → "의료"
+5. 주유소/주유/택시/버스/지하철/교통카드 → "교통"
+6. 식당/음식점/레스토랑/치킨/피자/분식/포차/회/고기 → "식비"
+7. 의류/옷/신발/쇼핑몰/백화점 → "쇼핑"
+8. 그 외 → "기타"
+
+## JSON 형식
+{"store_name": "상호명", "date": "YYYY-MM-DD", "total_amount": 숫자, "category": "카테고리", "is_income": false, "items": [{"name": "품목", "quantity": 1, "unit_price": 0, "total_price": 0}]}
+
+JSON만 응답하세요."""
         return self._call_gemini_api_base(prompt, image_base64)
 
     def _call_gemini_api_base(self, prompt: str, image_base64: str = None) -> Optional[Dict[str, Any]]:
@@ -289,8 +310,45 @@ JSON 형식만 응답하세요."""
         total = parse_amount(result.get('total_amount')) or parse_amount(result.get('total')) or parse_amount(result.get('합계')) or parse_amount(result.get('총액'))
         result['total_amount'] = total if total else 0
         
-        print(f"[OCR] Normalized result: store_name={result.get('store_name')}, total_amount={result.get('total_amount')}")
+        # 카테고리 자동 추론 (없거나 '기타'인 경우)
+        category = result.get('category')
+        if not category or category == '기타':
+            store_name = (result.get('store_name') or '').lower()
+            inferred = self._infer_category(store_name)
+            if inferred != '기타':
+                result['category'] = inferred
+                print(f"[OCR] Category inferred from store name: {inferred}")
+        
+        print(f"[OCR] Normalized result: store_name={result.get('store_name')}, total_amount={result.get('total_amount')}, category={result.get('category')}")
         return result
+    
+    def _infer_category(self, store_name: str) -> str:
+        """상호명으로 카테고리 추론"""
+        store_lower = store_name.lower()
+        
+        # 카페
+        if any(k in store_lower for k in ['카페', '커피', '스타벅스', '공차', '이디야', '투썸', '빽다방', '메가커피', 'cafe', 'coffee']):
+            return '카페'
+        # 편의점
+        if any(k in store_lower for k in ['편의점', 'cu', 'gs25', 'gs 25', '세븐일레븐', '7-eleven', '미니스톱', 'ministop', '이마트24']):
+            return '편의점'
+        # 마트
+        if any(k in store_lower for k in ['마트', '이마트', '홈플러스', '롯데마트', '하나로', '코스트코', 'costco', '트레이더스']):
+            return '마트'
+        # 의료
+        if any(k in store_lower for k in ['약국', '병원', '의원', '메디', '클리닉', '치과', '안과', '내과', '외과', '피부과', '정형외과']):
+            return '의료'
+        # 교통
+        if any(k in store_lower for k in ['주유', '주유소', '택시', '버스', '지하철', '교통', 'sk에너지', 'gs칼텍스', '현대오일']):
+            return '교통'
+        # 식비
+        if any(k in store_lower for k in ['식당', '음식점', '레스토랑', '치킨', '피자', '분식', '포차', '회', '고기', '곱창', '삼겹', '족발', '보쌈', '국밥', '찌개', '탕', '면', '밥', 'bbq', 'bhc', '교촌', '굽네']):
+            return '식비'
+        # 쇼핑
+        if any(k in store_lower for k in ['백화점', '쇼핑몰', '의류', '옷', '신발', '아울렛', '유니클로', '자라', 'zara', 'h&m']):
+            return '쇼핑'
+        
+        return '기타'
 
     def process_image(self, image_data: bytes) -> Dict[str, Any]:
         """
