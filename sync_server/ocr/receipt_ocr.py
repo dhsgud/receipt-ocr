@@ -218,7 +218,7 @@ JSON 형식만 응답하세요."""
         return None
 
     def _normalize_response(self, result: Dict[str, Any]) -> Dict[str, Any]:
-        """OCR 결과 정규화: 문자열 금액을 숫자로 변환"""
+        """OCR 결과 정규화: 문자열 금액을 숫자로 변환, 한글 키를 영문으로 변환"""
         # Gemini가 list를 반환하는 경우 처리
         if isinstance(result, list):
             if len(result) > 0 and isinstance(result[0], dict):
@@ -255,19 +255,41 @@ JSON 형식만 응답하세요."""
                     return None
             return None
         
-        # total_amount 정규화 (total 키도 확인)
-        total = parse_amount(result.get('total_amount')) or parse_amount(result.get('total'))
-        result['total_amount'] = total if total else 0
+        # 한글 키 -> 영문 키 매핑
+        key_mapping = {
+            '상호명': 'store_name',
+            '날짜': 'date',
+            '합계': 'total_amount',
+            '총액': 'total_amount',
+            '품목': 'items',
+            '카테고리': 'category',
+            '수입여부': 'is_income',
+        }
         
-        # items 내 가격 정규화
+        # 한글 키를 영문으로 변환
+        for kr_key, en_key in key_mapping.items():
+            if kr_key in result and en_key not in result:
+                result[en_key] = result[kr_key]
+        
+        # items 내 품목 정규화
         if 'items' in result and isinstance(result['items'], list):
+            normalized_items = []
             for item in result['items']:
                 if isinstance(item, dict):
-                    item['price'] = parse_amount(item.get('price')) or 0
-                    item['unit_price'] = parse_amount(item.get('unit_price')) or 0
-                    item['total_price'] = parse_amount(item.get('total_price')) or parse_amount(item.get('price')) or 0
+                    norm_item = {}
+                    # 한글 키 매핑
+                    norm_item['name'] = item.get('name') or item.get('이름') or item.get('품목명') or ''
+                    norm_item['quantity'] = item.get('quantity') or item.get('수량') or 1
+                    norm_item['unit_price'] = parse_amount(item.get('unit_price') or item.get('단가')) or 0
+                    norm_item['total_price'] = parse_amount(item.get('total_price') or item.get('가격') or item.get('price')) or 0
+                    normalized_items.append(norm_item)
+            result['items'] = normalized_items
         
-        print(f"[OCR] Normalized result: total_amount={result.get('total_amount')}")
+        # total_amount 정규화 (total, 합계, 총액 키도 확인)
+        total = parse_amount(result.get('total_amount')) or parse_amount(result.get('total')) or parse_amount(result.get('합계')) or parse_amount(result.get('총액'))
+        result['total_amount'] = total if total else 0
+        
+        print(f"[OCR] Normalized result: store_name={result.get('store_name')}, total_amount={result.get('total_amount')}")
         return result
 
     def process_image(self, image_data: bytes) -> Dict[str, Any]:
