@@ -219,6 +219,28 @@ JSON 형식만 응답하세요."""
 
     def _normalize_response(self, result: Dict[str, Any]) -> Dict[str, Any]:
         """OCR 결과 정규화: 문자열 금액을 숫자로 변환"""
+        # Gemini가 list를 반환하는 경우 처리
+        if isinstance(result, list):
+            if len(result) > 0 and isinstance(result[0], dict):
+                result = result[0]
+            else:
+                print(f"[OCR] Warning: Unexpected list response: {result}")
+                return {
+                    "store_name": "Unknown",
+                    "total_amount": 0,
+                    "items": [],
+                    "category": "기타"
+                }
+        
+        if not isinstance(result, dict):
+            print(f"[OCR] Warning: Unexpected response type: {type(result)}")
+            return {
+                "store_name": "Unknown",
+                "total_amount": 0,
+                "items": [],
+                "category": "기타"
+            }
+        
         def parse_amount(val):
             if val is None:
                 return None
