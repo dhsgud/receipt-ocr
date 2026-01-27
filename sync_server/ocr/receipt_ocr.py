@@ -119,37 +119,44 @@ JSON 형식만 응답하세요."""
         random.shuffle(keys)
         
         for api_key in keys:
-            try:
-                parts = [{"text": prompt}]
-                if image_base64:
-                    parts.append({
-                        "inline_data": {
-                            "mime_type": "image/jpeg",
-                            "data": image_base64
+             # Retry logic for rate limiting
+            for attempt in range(2): 
+                try:
+                    parts = [{"text": prompt}]
+                    if image_base64:
+                        parts.append({
+                            "inline_data": {
+                                "mime_type": "image/jpeg",
+                                "data": image_base64
+                            }
+                        })
+                    
+                    payload = {
+                        "contents": [{"parts": parts}],
+                        "generationConfig": {
+                            "temperature": 0.1,
+                            "responseMimeType": "application/json"
                         }
-                    })
-                
-                payload = {
-                    "contents": [{"parts": parts}],
-                    "generationConfig": {
-                        "temperature": 0.1,
-                        "responseMimeType": "application/json"
                     }
-                }
-                
-                res = requests.post(f"{GEMINI_API_URL}?key={api_key}", json=payload, timeout=60)
-                if res.status_code == 200:
-                    try:
-                        txt = res.json()['candidates'][0]['content']['parts'][0]['text']
-                        return json.loads(txt)
-                    except Exception as e:
-                        print(f"[OCR] Gemini Parsing Error: {e}, Response: {res.text[:100]}...")
-                        continue
-                else:
-                    print(f"[OCR] Gemini API Error: {res.status_code} - {res.text}")
-            except Exception as e:
-                print(f"[OCR] Gemini Connection Error: {e}")
-                continue
+                    
+                    res = requests.post(f"{GEMINI_API_URL}?key={api_key}", json=payload, timeout=60)
+                    if res.status_code == 200:
+                        try:
+                            txt = res.json()['candidates'][0]['content']['parts'][0]['text']
+                            return json.loads(txt)
+                        except Exception as e:
+                            print(f"[OCR] Gemini Parsing Error: {e}, Response: {res.text[:100]}...")
+                            break 
+                    elif res.status_code == 429:
+                        print(f"[OCR] Rate Limit Hit (429). Sleeping 15s before retry...")
+                        time.sleep(15)
+                        continue # Retry same key
+                    else:
+                        print(f"[OCR] Gemini API Error: {res.status_code} - {res.text}")
+                        break
+                except Exception as e:
+                    print(f"[OCR] Gemini Connection Error: {e}")
+                    break
         return None
 
     def _call_lighton_ocr(self, image_base64: str) -> Optional[str]:
@@ -211,6 +218,17 @@ JSON 형식만 응답하세요."""
                 if json_result:
                     print(f"[OCR] Pipeline Success (Local+Gemini) - {time.time()-start_time:.2f}s")
                     return json_result
+                else:
+                    # Gemini Structuring Failed, but we have text. Return partial result.
+                    print("[OCR] Warning: Gemini structuring failed (Rate Limit?), returning raw text result")
+                    return {
+                        "store_name": "OCR Text Only", # Special flag for UI
+                        "date": None,
+                        "total_amount": 0,
+                        "items": [],
+                        "category": None,
+                        "raw_text": raw_text
+                    }
         except Exception as e:
             print(f"[OCR] Pipeline 1 Failed: {e}")
 
