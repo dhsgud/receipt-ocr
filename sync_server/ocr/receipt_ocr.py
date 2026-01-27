@@ -1,7 +1,7 @@
 """
-Receipt OCR Module - Hybrid Pipeline (Gemini Cloud + Local Llama.cpp)
-이미지에서 바로 JSON 구조화된 영수증 데이터 추출
-우선순위: Gemini API (Key Rotation) -> Local Llama.cpp
+Receipt OCR Module - LightOnOCR Hybrid Pipeline
+Pipeline: Local LightOnOCR (Vision) -> Raw Text -> Gemini Flash (Structuring)
+Fallback: Gemini Vision (If Local fails) -> Local Fallback
 """
 
 import io
@@ -10,6 +10,7 @@ import base64
 import os
 import requests
 import random
+import time
 from typing import Optional, Any, Dict
 from PIL import Image, ImageFile
 
@@ -17,60 +18,32 @@ from PIL import Image, ImageFile
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 # ============== 서버 설정 ==============
-# llama.cpp Vision LLM 서버 (OpenAI 호환 API)
-# 환경변수로 오버라이드 가능: VISION_SERVER_URL
-
-# 서버 목록 (우선순위대로 시도 - 로컬 폴백용)
+# 라즈베리파이/PC에서 실행 중인 llama-server (LightOnOCR GGUF 로드됨)
 LOCAL_SERVERS = [
-    "http://localhost:408/v1/chat/completions",        # 로컬 데스크탑
-    "http://127.0.0.1:408/v1/chat/completions",        # 로컬 대체
-    "http://183.96.3.137:408/v1/chat/completions",     # 라즈베리파이 (원격)
+    "http://localhost:408/v1/chat/completions",
+    "http://127.0.0.1:408/v1/chat/completions",
+    "http://183.96.3.137:408/v1/chat/completions",
 ]
 
-# 환경변수 우선
+# 환경변수 오버라이드
 VISION_SERVER_URL = os.environ.get("VISION_SERVER_URL", None)
-LOCAL_MODEL_NAME = "gpt-4-vision-preview"  # llama.cpp에서는 무시됨
+LOCAL_MODEL_NAME = "gpt-4-vision-preview" # llama.cpp 호환성용
 
 # Gemini 설정
-# 사용자가 "2.5 flash" 급을 원했으므로 최신 2.0 Flash를 기본값으로 설정
-# (참고: 2026년 1월 기준 2.0 Flash가 유효함, 3.0 Preview도 존재)
 DEFAULT_GEMINI_MODEL = "gemini-2.0-flash"
 GEMINI_MODEL = os.environ.get("GEMINI_MODEL", DEFAULT_GEMINI_MODEL)
 GEMINI_API_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
 
-# 타임아웃 설정 (초)
 REQUEST_TIMEOUT = 300
-HEALTH_CHECK_TIMEOUT = 3  # 서버 감지용
-
-
-def get_available_local_server() -> str:
-    """사용 가능한 로컬/원격 llama.cpp 서버 찾기"""
-    # 환경변수로 지정된 경우
-    if VISION_SERVER_URL:
-        return VISION_SERVER_URL
-    
-    # 서버 목록에서 첫 번째 사용 가능한 서버 찾기
-    for server_url in LOCAL_SERVERS:
-        try:
-            health_url = server_url.replace("/v1/chat/completions", "/health")
-            response = requests.get(health_url, timeout=HEALTH_CHECK_TIMEOUT)
-            if response.status_code == 200:
-                print(f"[OCR] 로컬 서버 감지: {server_url}")
-                return server_url
-        except:
-            continue
-    
-    # 기본값 반환
-    print("[OCR] 활성 로컬 서버 없음, 기본값 사용")
-    return LOCAL_SERVERS[-1]
+HEALTH_CHECK_TIMEOUT = 3
 
 
 class ReceiptOCR:
-    """하이브리드 OCR 파이프라인 (Gemini + Local Fallback)"""
+    """LightOnOCR + Gemini 하이브리드 파이프라인"""
     
     def __init__(self, use_gpu: bool = False, lang: str = 'korean', server_url: str = None):
         self.lang = lang
-        self.local_server_url = server_url or get_available_local_server()
+        self.local_server_url = server_url or self._find_available_server()
         
         # Gemini 키 로드
         self.gemini_keys = []
@@ -78,76 +51,113 @@ class ReceiptOCR:
             self.gemini_keys.append(os.environ.get("GEMINI_API_KEY_1"))
         if os.environ.get("GEMINI_API_KEY_2"):
             self.gemini_keys.append(os.environ.get("GEMINI_API_KEY_2"))
-            
-        if self.gemini_keys:
-            print(f"[OCR] Gemini API 활성화됨 (키 {len(self.gemini_keys)}개)")
-        else:
-            print("[OCR] Gemini API 키 없음. 로컬/원격 서버만 사용합니다.")
 
-    def _get_gemini_key(self) -> Optional[str]:
-        """사용할 Gemini 키 선택 (간단한 로드밸런싱)"""
+    def _find_available_server(self) -> str:
+        """사용 가능한 로컬 서버 찾기"""
+        if VISION_SERVER_URL:
+            return VISION_SERVER_URL
+        
+        for url in LOCAL_SERVERS:
+            try:
+                health = url.replace("/v1/chat/completions", "/health")
+                requests.get(health, timeout=1)
+                print(f"[OCR] 로컬 서버 감지됨: {url}")
+                return url
+            except:
+                continue
+        
+        print("[OCR] 활성 로컬 서버 없음, 기본값 사용")
+        return LOCAL_SERVERS[-1]
+
+    def _call_gemini_text(self, text: str) -> Optional[Dict[str, Any]]:
+        """Gemini에게 텍스트 구조화 요청 (저비용)"""
+        if not text or len(text) < 5:
+            return None
+            
+        print(f"[OCR] Gemini Text structuring... ({len(text)} chars)")
+        
+        prompt = f"""다음 영수증 OCR 텍스트를 분석하여 JSON으로 변환해주세요.
+
+[OCR 텍스트]
+{text}
+[끝]
+
+## 분석 규칙
+1. 상호명, 날짜(YYYY-MM-DD), 합계금액, 품목 리스트 추출
+2. 카테고리는 상호명과 품목을 보고 추론 (식비, 교통, 의료, 마트, 편의점, 카페, 기타 등)
+3. 숫자가 오인식된 경우(예: 'IO00' -> 1000) 문맥에 맞춰 교정
+
+## JSON 포맷
+{{
+    "store_name": "상호명",
+    "date": "YYYY-MM-DD",
+    "total_amount": 0,
+    "category": "카테고리",
+    "is_income": false,
+    "items": [
+        {{"name": "품목명", "quantity": 1, "unit_price": 0, "total_price": 0}}
+    ]
+}}
+JSON만 응답하세요."""
+        
+        return self._call_gemini_api_base(prompt)
+
+    def _call_gemini_vision(self, image_base64: str) -> Optional[Dict[str, Any]]:
+        """Gemini에게 이미지 분석 요청 (Fallback)"""
+        print("[OCR] Gemini Vision processing...")
+        prompt = """영수증 이미지를 분석하여 JSON으로 정리해주세요.
+상호명, 날짜, 합계, 품목, 카테고리를 추출하세요.
+JSON 형식만 응답하세요."""
+        return self._call_gemini_api_base(prompt, image_base64)
+
+    def _call_gemini_api_base(self, prompt: str, image_base64: str = None) -> Optional[Dict[str, Any]]:
+        """Gemini API 공통 호출"""
         if not self.gemini_keys:
             return None
-        # 무작위 선택으로 분산
-        return random.choice(self.gemini_keys)
-
-    def _call_gemini(self, image_base64: str, prompt: str) -> Optional[Dict[str, Any]]:
-        """Gemini API 호출 시도"""
-        # 시도할 키 목록 (순서 섞어서)
-        keys_to_try = list(self.gemini_keys)
-        random.shuffle(keys_to_try)
+            
+        keys = list(self.gemini_keys)
+        random.shuffle(keys)
         
-        for api_key in keys_to_try:
+        for api_key in keys:
             try:
-                print(f"[OCR] Gemini ({api_key[:4]}...) 요청 중...")
+                parts = [{"text": prompt}]
+                if image_base64:
+                    parts.append({
+                        "inline_data": {
+                            "mime_type": "image/jpeg",
+                            "data": image_base64
+                        }
+                    })
                 
                 payload = {
-                    "contents": [{
-                        "parts": [
-                            {"text": prompt + "\n\nJSON 형식으로만 응답해주세요."},
-                            {
-                                "inline_data": {
-                                    "mime_type": "image/jpeg",
-                                    "data": image_base64
-                                }
-                            }
-                        ]
-                    }],
+                    "contents": [{"parts": parts}],
                     "generationConfig": {
                         "temperature": 0.1,
                         "responseMimeType": "application/json"
                     }
                 }
                 
-                response = requests.post(
-                    f"{GEMINI_API_URL}?key={api_key}",
-                    json=payload,
-                    timeout=30
-                )
-                
-                if response.status_code == 200:
-                    result = response.json()
+                res = requests.post(f"{GEMINI_API_URL}?key={api_key}", json=payload, timeout=30)
+                if res.status_code == 200:
                     try:
-                        text_content = result['candidates'][0]['content']['parts'][0]['text']
-                        return json.loads(text_content)
-                    except (KeyError, IndexError, json.JSONDecodeError) as e:
-                        print(f"[OCR] Gemini 응답 파싱 실패: {e}")
-                        # 파싱 실패는 다른 키로 재시도할 가치가 있음 (모델이 이상한 답을 줬을 수 있음)
+                        txt = res.json()['candidates'][0]['content']['parts'][0]['text']
+                        return json.loads(txt)
+                    except:
                         continue
-                else:
-                    print(f"[OCR] Gemini 오류 ({response.status_code}): {response.text}")
-                    # 429 (Too Many Requests) 등의 경우 다음 키 시도
-                    continue
-                    
-            except Exception as e:
-                print(f"[OCR] Gemini 연결 실패: {e}")
+            except:
                 continue
-                
-        return None # 모든 키 실패
+        return None
 
-    def _call_local_llm(self, image_base64: str, prompt: str) -> Dict[str, Any]:
-        """로컬 Llama.cpp 호출"""
-        print(f"[OCR] 로컬 Llama.cpp ({self.local_server_url})로 폴백...")
+    def _call_lighton_ocr(self, image_base64: str) -> Optional[str]:
+        """로컬 LightOnOCR 호출 (Text Extraction)"""
+        if not self.local_server_url:
+            return None
+            
+        print(f"[OCR] Local LightOnOCR processing... ({self.local_server_url})")
+        
+        # LightOnOCR 프롬프트: 텍스트 추출에 집중
+        # 모델마다 최적 프롬프트가 다를 수 있음. 일반적인 OCR 요청 사용.
+        prompt = "Convert this receipt image to text. Transcribe all visible text line by line."
         
         payload = {
             "model": LOCAL_MODEL_NAME,
@@ -155,7 +165,7 @@ class ReceiptOCR:
                 {
                     "role": "user",
                     "content": [
-                        {"type": "text", "text": prompt + "\nJSON만 응답해주세요."},
+                        {"type": "text", "text": prompt},
                         {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_base64}"}}
                     ]
                 }
@@ -164,121 +174,51 @@ class ReceiptOCR:
             "max_tokens": 2048,
         }
         
-        response = requests.post(self.local_server_url, json=payload, timeout=REQUEST_TIMEOUT)
-        
-        if response.status_code != 200:
-            raise RuntimeError(f"로컬 서버 오류: {response.text}")
-            
-        result = response.json()
-        content = result['choices'][0]['message']['content']
-        
-        # JSON 파싱
         try:
-            return json.loads(content)
-        except json.JSONDecodeError:
-            if "```json" in content:
-                content = content.split("```json")[1].split("```")[0].strip()
-                return json.loads(content)
-            elif "```" in content:
-                content = content.split("```")[1].split("```")[0].strip()
-                return json.loads(content)
-            raise RuntimeError("JSON 파싱 실패")
+            res = requests.post(self.local_server_url, json=payload, timeout=120) # 로컬 Inference는 느릴 수 있음
+            if res.status_code == 200:
+                content = res.json()['choices'][0]['message']['content']
+                print(f"[OCR] Local extracted {len(content)} chars")
+                return content
+            else:
+                print(f"[OCR] Local Server Error: {res.status_code}")
+        except Exception as e:
+            print(f"[OCR] Local Server Connect Error: {e}")
+            
+        return None
 
     def process_image(self, image_data: bytes) -> Dict[str, Any]:
         """
-        이미지에서 영수증 정보 추출 (Priority: Gemini -> Local)
+        [New Pipeline]
+        1. Local LightOnOCR (Vision) -> Raw Text
+        2. Gemini Flash (Text) -> JSON Structuring
+        3. Fallback: Gemini Vision (Image) -> JSON
         """
+        start_time = time.time()
+        image_base64 = base64.b64encode(image_data).decode('utf-8')
+        
+        # 1. Local LightOnOCR (Text Extraction)
         try:
-            # 이미지 전처리 및 Base64 인코딩
-            image = Image.open(io.BytesIO(image_data))
-            buffered = io.BytesIO()
-            image.save(buffered, format="JPEG")
-            img_str = base64.b64encode(buffered.getvalue()).decode('utf-8')
-            
-            # 통합 프롬프트
-            prompt = """영수증 이미지를 분석해주세요.
-
-## 분석 단계 (Chain of Thought)
-1️⃣ 상호명 확인: "약국", "카페", "편의점", "마트" 등 키워드로 카테고리 유추
-2️⃣ 품목명 확인: 약, 커피, 음식 등 품목으로 카테고리 유추
-3️⃣ 상호명과 품목을 종합하여 가장 적합한 카테고리 선택
-
-## JSON 형식으로 응답
-{
-    "store_name": "상호명",
-    "date": "YYYY-MM-DD",
-    "total_amount": 결제금액(정수),
-    "category": "카테고리",
-    "is_income": false,
-    "items": [{"name": "품목명", "quantity": 수량, "unit_price": 단가, "total_price": 금액}]
-}
-
-## 카테고리 목록
-의료, 카페, 편의점, 마트, 식비, 교통, 쇼핑, 생활, 문화, 기타"""
-
-            # 1. Gemini 시도
-            if self.gemini_keys:
-                gemini_result = self._call_gemini(img_str, prompt)
-                if gemini_result:
-                    print("[OCR] Gemini 처리 성공")
-                    return gemini_result
-                else:
-                    print("[OCR] 모든 Gemini 키 사용 실패/초과. 로컬로 전환합니다.")
-            
-            # 2. 로컬 폴백
-            return self._call_local_llm(img_str, prompt)
-            
+            raw_text = self._call_lighton_ocr(image_base64)
+            if raw_text:
+                # 2. Gemini Text Structuring
+                json_result = self._call_gemini_text(raw_text)
+                if json_result:
+                    print(f"[OCR] Pipeline Success (Local+Gemini) - {time.time()-start_time:.2f}s")
+                    return json_result
         except Exception as e:
-            print(f"[OCR ERROR] 파이프라인 실패: {str(e)}")
-            raise RuntimeError(f"OCR 처리 실패: {str(e)}")
+            print(f"[OCR] Pipeline 1 Failed: {e}")
 
-    
-    def extract_raw_text(self, image_data: bytes) -> str:
-        """
-        이미지에서 Raw 텍스트 추출 (Priority: Gemini -> Local)
-        """
-        image = Image.open(io.BytesIO(image_data))
-        buffered = io.BytesIO()
-        image.save(buffered, format="JPEG")
-        img_str = base64.b64encode(buffered.getvalue()).decode('utf-8')
-        
-        prompt = "이 영수증 이미지의 모든 텍스트를 있는 그대로 읽어주세요."
-        
-        # 1. Gemini 시도
-        if self.gemini_keys:
-            keys_to_try = list(self.gemini_keys)
-            random.shuffle(keys_to_try)
+        # 3. Fallback: Gemini Vision
+        print("[OCR] Fallback to Gemini Vision API...")
+        vision_result = self._call_gemini_vision(image_base64)
+        if vision_result:
+            return vision_result
             
-            for api_key in keys_to_try:
-                try:
-                    payload = {
-                        "contents": [{"parts": [
-                            {"text": prompt},
-                            {"inline_data": {"mime_type": "image/jpeg", "data": img_str}}
-                        ]}]
-                    }
-                    response = requests.post(f"{GEMINI_API_URL}?key={api_key}", json=payload, timeout=30)
-                    if response.status_code == 200:
-                        return response.json()['candidates'][0]['content']['parts'][0]['text'].strip()
-                except:
-                    continue
-        
-        # 2. 로컬 폴백 (간단 구현)
-        # TODO: 로컬 Raw text 추출 로직 구현 필요 시 추가
-        return "Raw text extraction not fully implemented for local fallback yet."
+        raise RuntimeError("All OCR pipelines failed")
 
     def process_base64(self, base64_image: str) -> Dict[str, Any]:
-        """Base64 이미지 처리"""
         if ',' in base64_image:
             base64_image = base64_image.split(',')[1]
         image_data = base64.b64decode(base64_image)
         return self.process_image(image_data)
-        
-    def extract_raw_text_base64(self, base64_image: str) -> str:
-        """Base64 이미지에서 Raw 텍스트 추출"""
-        if ',' in base64_image:
-            base64_image = base64_image.split(',')[1]
-        image_data = base64.b64decode(base64_image)
-        return self.extract_raw_text(image_data)
-
-
