@@ -179,7 +179,6 @@ JSON 형식만 응답하세요."""
         }
         
         try:
-        try:
             # 로컬 Inference는 느릴 수 있음 (120s -> 300s)
             res = requests.post(self.local_server_url, json=payload, timeout=300) 
             if res.status_code == 200:
