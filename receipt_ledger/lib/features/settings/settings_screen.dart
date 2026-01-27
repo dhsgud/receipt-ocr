@@ -263,12 +263,39 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 ),
                 const SizedBox(height: 12),
 
+                // Partner not connected warning
+                if (_isServerConnected && _partnerKey == null) ...[
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.orange.withOpacity(0.3)),
+                    ),
+                    child: const Row(
+                      children: [
+                        Icon(Icons.info_outline, color: Colors.orange, size: 20),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            '동기화하려면 먼저 파트너를 연결해주세요',
+                            style: TextStyle(fontSize: 13, color: Colors.orange),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                ],
+
                 // Sync Now Button
                 SizedBox(
                   width: double.infinity,
                   height: 50,
                   child: ElevatedButton.icon(
-                    onPressed: _isServerConnected && !_isSyncing ? _syncNow : null,
+                    onPressed: _isServerConnected && !_isSyncing && _partnerKey != null
+                        ? _syncNow
+                        : null,
                     icon: _isSyncing 
                         ? const SizedBox(
                             width: 20,
@@ -280,7 +307,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                           )
                         : const Icon(Icons.sync, color: Colors.white),
                     label: Text(
-                      _isSyncing ? '동기화 중...' : '지금 동기화',
+                      _isSyncing
+                          ? '동기화 중...'
+                          : (_partnerKey == null ? '파트너 연결 필요' : '지금 동기화'),
                       style: const TextStyle(
                         fontWeight: FontWeight.bold,
                         color: Colors.white,

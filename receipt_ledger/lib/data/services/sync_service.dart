@@ -101,6 +101,14 @@ class SyncService {
       return SyncResult(success: false, message: '이미 동기화 중입니다');
     }
 
+    // Partner connection required for sync
+    if (!isPaired) {
+      return SyncResult(
+        success: false,
+        message: '파트너 연결이 필요합니다. 설정에서 파트너를 추가해주세요.',
+      );
+    }
+
     _isSyncing = true;
     
     try {
