@@ -123,17 +123,7 @@ class SyncService {
 
       debugPrint('Syncing ${unsyncedTransactions.length} transactions...');
 
-      // Upload images for unsynced transactions (before sync)
-      if (!kIsWeb) {
-        for (final t in unsyncedTransactions) {
-          if (t.receiptImagePath != null && t.receiptImagePath!.isNotEmpty) {
-            final file = File(t.receiptImagePath!);
-            if (await file.exists()) {
-              await _imageCacheService.uploadImage(t.id, t.receiptImagePath!);
-            }
-          }
-        }
-      }
+      // Note: Images are stored locally only, not synced to server
 
       // Send sync request with owner and partner keys
       final response = await _dio.post(
@@ -152,20 +142,11 @@ class SyncService {
         final serverTime = data['serverTime'] as String;
         final downloaded = data['downloaded'] as List;
         
-        // Save downloaded transactions and cache their images
+        // Save downloaded transactions (images are local-only, not synced)
         for (final json in downloaded) {
           final transaction = TransactionModel.fromMap(json as Map<String, dynamic>);
-          
-          // Download and cache image if available
-          String? cachedImagePath;
-          if (!kIsWeb) {
-            cachedImagePath = await _imageCacheService.downloadAndCacheImage(transaction.id);
-          }
-          
-          // Update transaction with cached image path
           await _repository.insertTransaction(transaction.copyWith(
             isSynced: true,
-            receiptImagePath: cachedImagePath ?? transaction.receiptImagePath,
           ));
         }
 
