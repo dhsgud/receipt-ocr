@@ -10,6 +10,10 @@ import '../../data/services/notification_monitor_service.dart';
 import '../../data/repositories/transaction_repository.dart';
 import 'local_model_manager.dart';
 import 'calendar_settings_screen.dart';
+import 'subscription_screen.dart';
+import '../../data/services/purchase_service.dart';
+import '../../data/services/quota_service.dart';
+import '../../core/entitlements.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -178,6 +182,85 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           : ListView(
               padding: const EdgeInsets.all(20),
               children: [
+                // Subscription Section
+                const Text(
+                  '구독',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.grey,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Consumer(
+                  builder: (context, ref, _) {
+                    final subscription = ref.watch(subscriptionProvider);
+                    return StyledCard(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const SubscriptionScreen(),
+                          ),
+                        );
+                      },
+                      child: Row(
+                        children: [
+                          Icon(
+                            subscription.isPremium
+                                ? Icons.workspace_premium
+                                : Icons.star_outline,
+                            color: subscription.isPremium
+                                ? const Color(0xFF6366F1)
+                                : Colors.grey,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  subscription.tier != SubscriptionTier.free ? '프리미엄 구독 중' : '프리미엄 구독',
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Builder(
+                                  builder: (context) {
+                                    final tier = subscription.tier;
+                                    if (tier != SubscriptionTier.free) {
+                                      return Text(
+                                        tier == SubscriptionTier.pro ? 'Pro: 무제한 OCR' : 'Basic: 월 300회',
+                                        style: const TextStyle(
+                                          fontSize: 12,
+                                          color: Color(0xFF6366F1),
+                                        ),
+                                      );
+                                    }
+                                    final quotaNotifier = ref.read(quotaProvider.notifier);
+                                    final remaining = quotaNotifier.getRemainingMonthly(tier);
+                                    return Text(
+                                      '무료 OCR $remaining/10회 남음',
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.grey,
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ],
+                            ),
+                          ),
+                          const Icon(Icons.chevron_right, color: Colors.grey),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(height: 32),
+
                 // Theme Section
                 const Text(
                   '테마',

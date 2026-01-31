@@ -5,6 +5,9 @@ import 'core/theme/app_theme.dart';
 import 'shared/providers/app_providers.dart';
 import 'data/repositories/transaction_repository.dart';
 import 'data/services/notification_monitor_service.dart';
+import 'data/services/purchase_service.dart';
+import 'data/services/quota_service.dart';
+import 'data/services/ad_service.dart';
 import 'features/home/home_screen.dart';
 import 'features/calendar/calendar_screen.dart';
 import 'features/receipt/receipt_screen.dart';
@@ -55,9 +58,18 @@ class _MainNavigationScreenState extends ConsumerState<MainNavigationScreen> {
     super.initState();
     // Auto-sync on app start
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      _initSubscription();
       _performAutoSync();
       _initNotificationMonitoring();
     });
+  }
+  
+  /// Initialize subscription service (RevenueCat)
+  Future<void> _initSubscription() async {
+    await ref.read(subscriptionProvider.notifier).init();
+    await ref.read(quotaProvider.notifier).init();
+    // AdMob 초기화 - iOS/Android 설정 후 활성화
+    // await ref.read(adProvider.notifier).init();
   }
   
   @override

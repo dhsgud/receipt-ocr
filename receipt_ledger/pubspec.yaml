@@ -46,6 +46,12 @@ dependencies:
   
   # Notification Listener (for payment notifications)
   notification_listener_service: ^0.3.5
+  
+  # In-App Purchase (RevenueCat)
+  purchases_flutter: ^8.0.0
+  purchases_ui_flutter: ^8.11.0
+  # Google AdMob (iOS/Android 설정 후 활성화)
+  # google_mobile_ads: ^7.0.0
 
 dev_dependencies:
   flutter_test:

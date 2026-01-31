@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../shared/providers/app_providers.dart';
 import '../../shared/widgets/common_widgets.dart';
+import '../../shared/widgets/banner_ad_widget.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/formatters.dart';
 import '../../data/models/category.dart';
@@ -713,6 +714,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           ],
         ),
       ),
+      // 배너 광고 (AdMob 설정 후 활성화)
+      // bottomNavigationBar: const BottomBannerAd(),
     );
   }
 

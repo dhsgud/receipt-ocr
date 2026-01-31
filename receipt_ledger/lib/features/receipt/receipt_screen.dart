@@ -11,6 +11,10 @@ import '../../data/models/transaction.dart';
 import '../../data/models/receipt.dart';
 import '../../shared/providers/app_providers.dart';
 import '../settings/local_model_manager.dart';
+import '../settings/subscription_screen.dart';
+import '../../data/services/purchase_service.dart';
+import '../../data/services/quota_service.dart';
+import '../../core/entitlements.dart';
 
 /// 일괄 처리용 영수증 아이템
 class BatchReceiptItem {
@@ -136,6 +140,16 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
   Future<void> _processReceipt() async {
     if (_imageBytes == null) return;
 
+    // 구독 상태 확인
+    final subscription = ref.read(subscriptionProvider);
+    final quotaNotifier = ref.read(quotaProvider.notifier);
+    
+    // 인증된 사용자의 티어로 사용 가능 여부 확인
+    if (!quotaNotifier.canUseOcr(subscription.tier)) {
+      await _showSubscriptionDialog();
+      return;
+    }
+
     // 새 CancelToken 생성
     _ocrCancelToken?.cancel('New request started');
     _ocrCancelToken = CancelToken();
@@ -229,6 +243,9 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
         // 수입 여부 자동 설정
         _isIncome = receiptData.isIncome;
       });
+      
+      // OCR 성공 시 사용량 증가
+      await ref.read(quotaProvider.notifier).incrementUsage();
     } on DioException catch (e) {
       if (e.type == DioExceptionType.cancel) {
         debugPrint('[OCR] Request cancelled by user');
@@ -501,6 +518,126 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
       _isBatchMode = false;
       _isBatchProcessing = false;
     });
+  }
+
+  /// 구독 유도 다이얼로그
+  Future<void> _showSubscriptionDialog() async {
+    final subscription = ref.read(subscriptionProvider);
+    final quotaNotifier = ref.read(quotaProvider.notifier);
+    final tier = subscription.tier;
+    
+    final remainingDaily = quotaNotifier.getRemainingDaily(tier);
+    final remainingMonthly = quotaNotifier.getRemainingMonthly(tier);
+    
+    // Free 등급이고 총 사용량이 소진된 경우 (결제 필수)
+    final bool isFreeExhausted = tier == SubscriptionTier.free && remainingMonthly <= 0;
+    
+    final result = await showDialog<String>(
+      context: context,
+      barrierDismissible: !isFreeExhausted, // 결제 필수인 경우 닫기 불가
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(
+              isFreeExhausted ? Icons.lock : Icons.workspace_premium, 
+              color: isFreeExhausted ? Colors.red : const Color(0xFF6366F1),
+            ),
+            const SizedBox(width: 8),
+            Text(isFreeExhausted ? '구독 필요' : '프리미엄 구독'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Free 등급 총 소진 시
+            if (isFreeExhausted) ...[
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.red.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.red.withValues(alpha: 0.3)),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.warning_amber, color: Colors.red),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        '무료 체험 10회가 모두 소진되었습니다.\n계속 사용하려면 구독이 필요합니다.',
+                        style: TextStyle(fontWeight: FontWeight.w500),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ] else ...[
+              Text(
+                tier == SubscriptionTier.free
+                    ? '오늘 OCR 사용량이 소진되었습니다.\n(오늘: $remainingDaily회, 총: $remainingMonthly회 남음)'
+                    : '오늘 OCR 사용량이 소진되었습니다.\n(오늘: $remainingDaily회 남음)',
+                style: const TextStyle(fontSize: 15),
+              ),
+            ],
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFF6366F1).withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('✨ 프리미엄 혜택', style: TextStyle(fontWeight: FontWeight.bold)),
+                  SizedBox(height: 8),
+                  Text('• Basic: 일일 20회, 월 300회 + 광고 제거'),
+                  Text('• Pro: 일일 100회, 무제한 + 멀티디바이스'),
+                  Text('• 클라우드 동기화 & 상세 리포트'),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              isFreeExhausted 
+                  ? '🔒 Basic ₩1,900/월부터 시작!'
+                  : (tier == SubscriptionTier.free 
+                      ? 'Basic ₩1,900/월부터 시작!'
+                      : 'Pro로 업그레이드 해보세요!'),
+              style: TextStyle(
+                fontWeight: FontWeight.bold, 
+                color: isFreeExhausted ? Colors.red : const Color(0xFF6366F1),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          // Free 소진 시 수동 입력 버튼 제거
+          if (!isFreeExhausted)
+            TextButton(
+              onPressed: () => Navigator.of(context).pop('manual'),
+              child: const Text('수동 입력'),
+            ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop('subscribe'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: isFreeExhausted ? Colors.red : const Color(0xFF6366F1),
+            ),
+            child: Text(
+              isFreeExhausted ? '지금 구독하기' : '구독하기', 
+              style: const TextStyle(color: Colors.white),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (result == 'subscribe' && mounted) {
+      await Navigator.of(context).push(
+        MaterialPageRoute(builder: (context) => const SubscriptionScreen()),
+      );
+    }
   }
 
   /// 이미지 취소 확인 다이얼로그

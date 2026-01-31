@@ -6,6 +6,7 @@ import '../../core/utils/formatters.dart';
 import '../../data/models/category.dart';
 import '../../shared/providers/app_providers.dart';
 import '../../shared/widgets/common_widgets.dart';
+import '../../shared/widgets/banner_ad_widget.dart';
 
 class StatisticsScreen extends ConsumerWidget {
   const StatisticsScreen({super.key});
@@ -53,6 +54,8 @@ class StatisticsScreen extends ConsumerWidget {
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (_, __) => const Center(child: Text('오류가 발생했습니다')),
       ),
+      // 배너 광고 (AdMob 설정 후 활성화)
+      // bottomNavigationBar: const BottomBannerAd(),
     );
   }
 
