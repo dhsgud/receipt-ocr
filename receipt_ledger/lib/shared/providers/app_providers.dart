@@ -137,7 +137,7 @@ final ocrServerUrlProvider = StateProvider<String>((ref) {
 /// OCR 제공자 (Server Mode일 때 사용)
 /// 'auto' (Hybrid), 'gemini', 'gpt', 'claude', 'grok'
 final ocrProviderProvider = StateProvider<String>((ref) {
-  return 'auto'; 
+  return 'gemini';  // 프로덕션: Gemini 전용
 });
 
 // ============================================================================

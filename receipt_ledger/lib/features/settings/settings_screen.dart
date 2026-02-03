@@ -4,13 +4,13 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/app_config.dart';
 import '../../shared/providers/app_providers.dart';
 import '../../shared/widgets/common_widgets.dart';
 import '../../data/services/notification_monitor_service.dart';
-import '../../data/repositories/transaction_repository.dart';
-import 'local_model_manager.dart';
 import 'calendar_settings_screen.dart';
 import 'subscription_screen.dart';
+import 'admin_screen.dart';
 import '../../data/services/purchase_service.dart';
 import '../../data/services/quota_service.dart';
 import '../../core/entitlements.dart';
@@ -635,18 +635,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 ),
                 const SizedBox(height: 12),
                 _buildNotificationMonitoringCard(),
-                const SizedBox(height: 32),
-                // OCR Model Section
-                const Text(
-                  'OCR 모델 설정 (실험실)',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.grey,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                _buildModelManagerCard(),
                 
                 const SizedBox(height: 32),
 
@@ -671,311 +659,64 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     ],
                   ),
                 ),
-              ],
-            ),
-    );
-  }
-
-  Widget _buildModelManagerCard() {
-    final modelState = ref.watch(localModelManagerProvider);
-    final manager = ref.read(localModelManagerProvider.notifier);
-    final ocrMode = ref.watch(ocrModeProvider);
-
-    // 상태 텍스트 결정
-    String statusText;
-    Color statusColor;
-    if (modelState.isModelLoaded) {
-      statusText = '로드됨 (사용 준비 완료)';
-      statusColor = AppColors.income;
-    } else if (modelState.isModelLoading) {
-      statusText = '모델 로딩 중...';
-      statusColor = AppColors.primary;
-    } else if (modelState.isModelReady) {
-      statusText = '다운로드됨 (로드 필요)';
-      statusColor = Colors.orange;
-    } else {
-      statusText = '다운로드 필요';
-      statusColor = Colors.grey;
-    }
-
-    return StyledCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // 모델 상태 헤더
-          Row(
-            children: [
-              const Icon(Icons.download_for_offline, color: AppColors.primary),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      '오프라인 OCR 모델 (2.5GB)',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
-                      ),
+                
+                // Admin Settings (only visible in admin mode)
+                if (kAdminMode) ...[
+                  const SizedBox(height: 32),
+                  const Text(
+                    '개발자',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.grey,
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      statusText,
-                      style: TextStyle(fontSize: 12, color: statusColor),
-                    ),
-                  ],
-                ),
-              ),
-              // 액션 버튼
-              if (modelState.isDownloading || modelState.isModelLoading)
-                const SizedBox(
-                  width: 24,
-                  height: 24,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              else if (modelState.isModelLoaded)
-                IconButton(
-                  onPressed: manager.unloadModel,
-                  icon: const Icon(Icons.stop_circle, color: Colors.orange),
-                  tooltip: '모델 언로드',
-                )
-              else if (modelState.isModelReady)
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      onPressed: () => _loadModel(manager),
-                      icon: const Icon(Icons.play_circle, color: AppColors.income),
-                      tooltip: '모델 로드',
-                    ),
-                    IconButton(
-                      onPressed: () => _showDeleteModelDialog(manager),
-                      icon: const Icon(Icons.delete, color: AppColors.expense),
-                      tooltip: '모델 삭제',
-                    ),
-                  ],
-                )
-              else
-                IconButton(
-                  onPressed: manager.downloadModels,
-                  icon: const Icon(Icons.download, color: AppColors.primary),
-                  tooltip: '모델 다운로드',
-                ),
-            ],
-          ),
-          
-          // 다운로드 진행률
-          if (modelState.isDownloading) ...[
-            const SizedBox(height: 12),
-            LinearProgressIndicator(
-              value: modelState.progress,
-              backgroundColor: Colors.grey[200],
-              valueColor: const AlwaysStoppedAnimation<Color>(AppColors.primary),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              '다운로드 중... ${(modelState.progress * 100).toStringAsFixed(1)}%',
-              style: const TextStyle(fontSize: 12, color: Colors.grey),
-            ),
-          ],
-          
-          // 오류 메시지
-          if (modelState.error != null) ...[
-            const SizedBox(height: 12),
-            Text(
-              '오류: ${modelState.error}',
-              style: const TextStyle(fontSize: 12, color: AppColors.expense),
-            ),
-          ],
-          
-          // OCR 모드 선택 (항상 표시)
-          const SizedBox(height: 16),
-          const Divider(),
-          const SizedBox(height: 12),
-          const Text(
-            'OCR 모드',
-            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-          ),
-          const SizedBox(height: 8),
-          Column(
-            children: [
-              _buildOcrModeRadio(
-                ocrMode, 
-                OcrMode.auto, 
-                '자동', 
-                Icons.auto_mode,
-                '로컬 > 외부 서버 > OCR 서버 순',
-              ),
-              _buildOcrModeRadio(
-                ocrMode, 
-                OcrMode.externalLlama, 
-                '외부 llama.cpp', 
-                Icons.dns,
-                '라즈베리파이 등 외부 서버',
-              ),
-              _buildOcrModeRadio(
-                ocrMode, 
-                OcrMode.server, 
-                'OCR 서버', 
-                Icons.cloud,
-                'Python FastAPI OCR',
-              ),
-              if (!kIsWeb)
-                _buildOcrModeRadio(
-                  ocrMode, 
-                  OcrMode.local, 
-                  '로컬 디바이스', 
-                  Icons.phone_android,
-                  '오프라인 (모델 로드 필요)',
-                ),
-
-              // OCR Provider Selector (Visible only when Server Mode is active/selected)
-              if (ocrMode == OcrMode.server) ...[
-                const SizedBox(height: 12),
-                const Divider(),
-                const Text(
-                  'OCR 엔진 선택 (Python Server)',
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-                ),
-                const SizedBox(height: 8),
-                Consumer(
-                  builder: (context, ref, _) {
-                    final provider = ref.watch(ocrProviderProvider);
-                    return DropdownButtonFormField<String>(
-                      value: provider,
-                      decoration: const InputDecoration(
-                        border: OutlineInputBorder(),
-                        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      ),
-                      items: const [
-                        DropdownMenuItem(value: 'auto', child: Text('🤖 Hybrid (Local + Gemini) - 추천')),
-                        DropdownMenuItem(value: 'gemini', child: Text('✨ Gemini Only (Fast)')),
-                        DropdownMenuItem(value: 'gpt', child: Text('🧠 GPT-4o (OpenAI)')),
-                        DropdownMenuItem(value: 'claude', child: Text('🎭 Claude 3.5 Sonnet')),
-                        DropdownMenuItem(value: 'grok', child: Text('🌌 Grok (xAI)')),
+                  ),
+                  const SizedBox(height: 12),
+                  StyledCard(
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const AdminScreen(),
+                        ),
+                      );
+                    },
+                    child: Row(
+                      children: [
+                        const Icon(Icons.developer_mode, color: Colors.deepPurple),
+                        const SizedBox(width: 12),
+                        const Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                '개발자 설정',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              SizedBox(height: 2),
+                              Text(
+                                'OCR 모드, 서버 URL 등',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const Icon(Icons.chevron_right, color: Colors.grey),
                       ],
-                      onChanged: (value) {
-                        if (value != null) {
-                          ref.read(ocrProviderProvider.notifier).state = value;
-                        }
-                      },
-                    );
-                  },
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  '* Hybrid: 로컬(LightOnOCR)로 텍스트 추출 후 Gemini로 정리 (가장 경제적)\n* 그 외: 클라우드 Vision API 직접 호출 (API 요금 발생 가능)',
-                  style: TextStyle(fontSize: 11, color: Colors.grey),
-                ),
+                    ),
+                  ),
+                ],
               ],
-
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(
-            _getOcrModeDescription(ocrMode, modelState.isModelLoaded),
-            style: const TextStyle(fontSize: 11, color: Colors.grey),
-          ),
-        ],
-      ),
+            ),
     );
   }
 
-  String _getOcrModeDescription(OcrMode mode, bool isModelLoaded) {
-    switch (mode) {
-      case OcrMode.auto:
-        return isModelLoaded 
-            ? '현재: 로컬 OCR 사용 중'
-            : '현재: 외부 서버 또는 OCR 서버 사용';
-      case OcrMode.externalLlama:
-        final url = ref.read(externalLlamaUrlProvider);
-        return '외부 llama.cpp 서버: $url';
-      case OcrMode.server:
-        final url = ref.read(ocrServerUrlProvider);
-        return 'OCR 서버: $url';
-      case OcrMode.local:
-        return isModelLoaded 
-            ? '로컬 OCR 사용 중 (오프라인 가능)'
-            : '⚠️ 먼저 모델을 로드해주세요';
-    }
-  }
-
-  Widget _buildOcrModeRadio(
-    OcrMode currentMode,
-    OcrMode value,
-    String label,
-    IconData icon,
-    String description,
-  ) {
-    return RadioListTile<OcrMode>(
-      value: value,
-      groupValue: currentMode,
-      onChanged: (OcrMode? newValue) {
-        if (newValue != null) {
-          ref.read(ocrModeProvider.notifier).state = newValue;
-        }
-      },
-      title: Row(
-        children: [
-          Icon(icon, size: 20),
-          const SizedBox(width: 8),
-          Text(label, style: const TextStyle(fontSize: 14)),
-        ],
-      ),
-      subtitle: Text(
-        description,
-        style: const TextStyle(fontSize: 11, color: Colors.grey),
-      ),
-      dense: true,
-      contentPadding: EdgeInsets.zero,
-    );
-  }
-
-  Future<void> _loadModel(LocalModelManager manager) async {
-    try {
-      await manager.loadModel();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('모델 로드 완료! 로컬 OCR을 사용할 수 있습니다.'),
-            backgroundColor: AppColors.income,
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('모델 로드 실패: $e'),
-            backgroundColor: AppColors.expense,
-          ),
-        );
-      }
-    }
-  }
-
-  void _showDeleteModelDialog(LocalModelManager manager) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('모델 삭제'),
-        content: const Text('다운로드한 모델 파일을 삭제하시겠습니까?\n오프라인 OCR을 사용할 수 없게 됩니다.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('취소'),
-          ),
-          TextButton(
-            onPressed: () {
-              manager.deleteModels();
-              Navigator.pop(context);
-            },
-            child: const Text('삭제', style: TextStyle(color: AppColors.expense)),
-          ),
-        ],
-      ),
-    );
-  }
 
 
   Widget _buildInfoRow(String label, String value) {

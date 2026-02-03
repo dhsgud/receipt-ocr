@@ -43,3 +43,26 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Flutter Launcher Icons
+# Generated icons are committed, but keep .flutter-plugins
+.flutter-plugins
+
+# Generated files
+*.g.dart
+*.freezed.dart
+*.mocks.dart
+
+# Web related
+/web/.dart_tool/
+
+# Miscellaneous Flutter
+.packages
+pubspec.lock
+*.lock
+
+# Local configuration
+local.properties
+
+# Analysis output
+analyze_output.txt

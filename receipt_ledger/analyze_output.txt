@@ -1,21 +1,113 @@
-ERROR|COMPILE_TIME_ERROR|CREATION_WITH_NON_TYPE|C:\\Users\\ikm11\\Desktop\\receipt-ocr\\receipt_ledger\\test\\widget_test.dart|16|35|5|The name 'MyApp' isn't a class.
-WARNING|STATIC_WARNING|UNUSED_IMPORT|C:\\Users\\ikm11\\Desktop\\receipt-ocr\\receipt_ledger\\lib\\features\\receipt\\receipt_screen.dart|2|8|33|Unused import: 'package:flutter/foundation.dart'.
-WARNING|STATIC_WARNING|UNUSED_IMPORT|C:\\Users\\ikm11\\Desktop\\receipt-ocr\\receipt_ledger\\lib\\features\\settings\\settings_screen.dart|9|8|39|Unused import: '../../data/services/sync_service.dart'.
-INFO|HINT|DEPRECATED_MEMBER_USE|C:\\Users\\ikm11\\Desktop\\receipt-ocr\\receipt_ledger\\lib\\app.dart|58|35|11|'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss.
-INFO|HINT|DEPRECATED_MEMBER_USE|C:\\Users\\ikm11\\Desktop\\receipt-ocr\\receipt_ledger\\lib\\data\\models\\category.dart|113|22|5|'value' is deprecated and shouldn't be used. Use component accessors like .r or .g, or toARGB32 for an explicit conversion.
-INFO|HINT|DEPRECATED_MEMBER_USE|C:\\Users\\ikm11\\Desktop\\receipt-ocr\\receipt_ledger\\lib\\features\\calendar\\calendar_screen.dart|117|44|11|'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss.
-INFO|HINT|DEPRECATED_MEMBER_USE|C:\\Users\\ikm11\\Desktop\\receipt-ocr\\receipt_ledger\\lib\\features\\calendar\\calendar_screen.dart|139|50|11|'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss.
-INFO|LINT|UNNECESSARY_UNDERSCORES|C:\\Users\\ikm11\\Desktop\\receipt-ocr\\receipt_ledger\\lib\\features\\calendar\\calendar_screen.dart|186|30|2|Unnecessary use of multiple underscores.
-INFO|LINT|UNNECESSARY_UNDERSCORES|C:\\Users\\ikm11\\Desktop\\receipt-ocr\\receipt_ledger\\lib\\features\\calendar\\calendar_screen.dart|223|26|2|Unnecessary use of multiple underscores.
-INFO|HINT|DEPRECATED_MEMBER_USE|C:\\Users\\ikm11\\Desktop\\receipt-ocr\\receipt_ledger\\lib\\features\\home\\home_screen.dart|55|54|11|'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss.
-INFO|LINT|UNNECESSARY_UNDERSCORES|C:\\Users\\ikm11\\Desktop\\receipt-ocr\\receipt_ledger\\lib\\features\\home\\home_screen.dart|73|34|2|Unnecessary use of multiple underscores.
-INFO|LINT|UNNECESSARY_UNDERSCORES|C:\\Users\\ikm11\\Desktop\\receipt-ocr\\receipt_ledger\\lib\\features\\home\\home_screen.dart|146|26|2|Unnecessary use of multiple underscores.
-INFO|HINT|DEPRECATED_MEMBER_USE|C:\\Users\\ikm11\\Desktop\\receipt-ocr\\receipt_ledger\\lib\\features\\home\\home_screen.dart|164|38|11|'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss.
-INFO|HINT|DEPRECATED_MEMBER_USE|C:\\Users\\ikm11\\Desktop\\receipt-ocr\\receipt_ledger\\lib\\features\\home\\home_screen.dart|220|29|11|'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss.
-INFO|HINT|DEPRECATED_MEMBER_USE|C:\\Users\\ikm11\\Desktop\\receipt-ocr\\receipt_ledger\\lib\\features\\home\\home_screen.dart|228|32|11|'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss.
-INFO|HINT|DEPRECATED_MEMBER_USE|C:\\Users\\ikm11\\Desktop\\receipt-ocr\\receipt_ledger\\lib\\features\\settings\\settings_screen.dart|204|25|11|'activeColor' is deprecated and shouldn't be used. Use activeThumbColor or activeTrackColor instead. This feature was deprecated after v3.31.0-2.0.pre.
-INFO|LINT|UNNECESSARY_UNDERSCORES|C:\\Users\\ikm11\\Desktop\\receipt-ocr\\receipt_ledger\\lib\\features\\statistics\\statistics_screen.dart|54|20|2|Unnecessary use of multiple underscores.
-INFO|HINT|DEPRECATED_MEMBER_USE|C:\\Users\\ikm11\\Desktop\\receipt-ocr\\receipt_ledger\\lib\\features\\statistics\\statistics_screen.dart|176|37|11|'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss.
-INFO|HINT|DEPRECATED_MEMBER_USE|C:\\Users\\ikm11\\Desktop\\receipt-ocr\\receipt_ledger\\lib\\features\\statistics\\statistics_screen.dart|200|50|11|'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss.
-INFO|HINT|DEPRECATED_MEMBER_USE|C:\\Users\\ikm11\\Desktop\\receipt-ocr\\receipt_ledger\\lib\\shared\\widgets\\common_widgets.dart|27|33|11|'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss.
-INFO|HINT|DEPRECATED_MEMBER_USE|C:\\Users\\ikm11\\Desktop\\receipt-ocr\\receipt_ledger\\lib\\shared\\widgets\\common_widgets.dart|69|42|11|'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss.
+Resolving dependencies...
+Downloading packages...
+  characters 1.4.0 (1.4.1 available)
+  cross_file 0.3.5+1 (0.3.5+2 available)
+  dio 5.9.0 (5.9.1 available)
+  equatable 2.0.7 (2.0.8 available)
+  ffi 2.1.4 (2.1.5 available)
+  fl_chart 0.68.0 (1.1.1 available)
+  flutter_riverpod 2.6.1 (3.2.0 available)
+  freezed_annotation 2.4.4 (3.1.0 available)
+  image_picker_android 0.8.13+10 (0.8.13+13 available)
+  image_picker_ios 0.8.13+3 (0.8.13+6 available)
+  intl 0.19.0 (0.20.2 available)
+  json_annotation 4.9.0 (4.10.0 available)
+  lints 6.0.0 (6.1.0 available)
+  matcher 0.12.17 (0.12.18 available)
+  material_color_utilities 0.11.1 (0.13.0 available)
+  meta 1.17.0 (1.18.1 available)
+  path_provider_foundation 2.5.1 (2.6.0 available)
+  purchases_flutter 8.11.0 (9.10.8 available)
+  purchases_ui_flutter 8.11.0 (9.10.8 available)
+  riverpod 2.6.1 (3.2.0 available)
+  shared_preferences_android 2.4.18 (2.4.20 available)
+  table_calendar 3.1.3 (3.2.0 available)
+  test_api 0.7.7 (0.7.9 available)
+  timezone 0.9.4 (0.11.0 available)
+Got dependencies!
+24 packages have newer versions incompatible with dependency constraints.
+Try `flutter pub outdated` for more information.
+Analyzing receipt_ledger...                                     
+
+warning - Unused import: 'data/repositories/transaction_repository.dart' - lib\app.dart:6:8 - unused_import
+warning - Unused import: 'data/services/ad_service.dart' - lib\app.dart:10:8 - unused_import
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\app.dart:187:35 - deprecated_member_use
+   info - Dangling library doc comment - lib\core\app_config.dart:3:1 - dangling_library_doc_comments
+   info - 'value' is deprecated and shouldn't be used. Use component accessors like .r or .g, or toARGB32 for an explicit conversion - lib\data\models\category.dart:142:22 - deprecated_member_use
+warning - Unused import: '../../core/entitlements.dart' - lib\data\services\ad_service.dart:3:8 - unused_import
+   info - Unnecessary use of getter and setter to wrap a field - lib\data\services\calendar_sync_service.dart:40:27 - unnecessary_getters_setters
+warning - The receiver can't be null, so the null-aware operator '?.' is unnecessary - lib\data\services\calendar_sync_service.dart:233:20 - invalid_null_aware_operator
+warning - Unused import: 'dart:convert' - lib\data\services\local_ocr_service.dart:2:8 - unused_import
+   info - The import of 'dart:typed_data' is unnecessary because all of the used elements are also provided by the import of 'package:flutter/foundation.dart' - lib\data\services\local_ocr_service_native.dart:2:8 - unnecessary_import
+   info - The private field _isLoaded could be 'final' - lib\data\services\local_ocr_service_native.dart:9:8 - prefer_final_fields
+   info - The private field _isLoading could be 'final' - lib\data\services\local_ocr_service_native.dart:10:8 - prefer_final_fields
+   info - The import of 'dart:typed_data' is unnecessary because all of the used elements are also provided by the import of 'package:flutter/foundation.dart' - lib\data\services\receipt_image_service.dart:2:8 - unnecessary_import
+   info - The imported package 'image' isn't a dependency of the importing package - lib\data\services\receipt_image_service.dart:5:8 - depend_on_referenced_packages
+  error - Target of URI doesn't exist: 'package:image/image.dart' - lib\data\services\receipt_image_service.dart:5:8 - uri_does_not_exist
+   info - The import of 'dart:typed_data' is unnecessary because all of the used elements are also provided by the import of 'package:flutter/foundation.dart' - lib\data\services\sllm_service.dart:2:8 - unnecessary_import
+warning - Unused import: 'dart:io' - lib\data\services\sync_service.dart:2:8 - unused_import
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\calendar\calendar_screen.dart:58:50 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\calendar\calendar_screen.dart:104:40 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\calendar\calendar_screen.dart:120:42 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\calendar\calendar_screen.dart:136:39 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\calendar\calendar_screen.dart:254:53 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\calendar\calendar_screen.dart:271:45 - deprecated_member_use
+   info - 'value' is deprecated and shouldn't be used. Use initialValue instead. This will set the initial value for the form field. This feature was deprecated after v3.33.0-1.0.pre - lib\features\calendar\calendar_screen.dart:402:19 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\calendar\calendar_screen.dart:496:36 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\calendar\calendar_screen.dart:677:44 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\calendar\calendar_screen.dart:710:55 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\calendar\calendar_screen.dart:727:56 - deprecated_member_use
+   info - Unnecessary use of multiple underscores - lib\features\calendar\calendar_screen.dart:776:30 - unnecessary_underscores
+   info - Unnecessary use of multiple underscores - lib\features\calendar\calendar_screen.dart:819:26 - unnecessary_underscores
+warning - Unused import: '../../shared/widgets/banner_ad_widget.dart' - lib\features\home\home_screen.dart:8:8 - unused_import
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\home\home_screen.dart:56:50 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\home\home_screen.dart:102:40 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\home\home_screen.dart:118:42 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\home\home_screen.dart:134:39 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\home\home_screen.dart:251:53 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\home\home_screen.dart:268:45 - deprecated_member_use
+   info - 'value' is deprecated and shouldn't be used. Use initialValue instead. This will set the initial value for the form field. This feature was deprecated after v3.33.0-1.0.pre - lib\features\home\home_screen.dart:399:19 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\home\home_screen.dart:493:36 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\home\home_screen.dart:616:54 - deprecated_member_use
+   info - Unnecessary use of multiple underscores - lib\features\home\home_screen.dart:634:34 - unnecessary_underscores
+   info - Unnecessary use of multiple underscores - lib\features\home\home_screen.dart:710:26 - unnecessary_underscores
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\home\home_screen.dart:730:38 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\home\home_screen.dart:786:29 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\home\home_screen.dart:794:32 - deprecated_member_use
+warning - This default clause is covered by the previous cases - lib\features\receipt\receipt_screen.dart:188:9 - unreachable_switch_default
+warning - This default clause is covered by the previous cases - lib\features\receipt\receipt_screen.dart:361:7 - unreachable_switch_default
+   info - 'value' is deprecated and shouldn't be used. Use initialValue instead. This will set the initial value for the form field. This feature was deprecated after v3.33.0-1.0.pre - lib\features\receipt\receipt_screen.dart:1259:27 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\receipt\receipt_screen.dart:1455:37 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\settings\admin_screen.dart:60:36 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\settings\admin_screen.dart:62:55 - deprecated_member_use
+   info - 'value' is deprecated and shouldn't be used. Use initialValue instead. This will set the initial value for the form field. This feature was deprecated after v3.33.0-1.0.pre - lib\features\settings\admin_screen.dart:139:25 - deprecated_member_use
+  error - Undefined class 'LocalModelState' - lib\features\settings\admin_screen.dart:282:7 - undefined_class
+   info - 'groupValue' is deprecated and shouldn't be used. Use a RadioGroup ancestor to manage group value instead. This feature was deprecated after v3.32.0-0.0.pre - lib\features\settings\admin_screen.dart:398:7 - deprecated_member_use
+   info - 'onChanged' is deprecated and shouldn't be used. Use RadioGroup to handle value change instead. This feature was deprecated after v3.32.0-0.0.pre - lib\features\settings\admin_screen.dart:399:7 - deprecated_member_use
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\features\settings\calendar_settings_screen.dart:82:48 - use_build_context_synchronously
+   info - 'groupValue' is deprecated and shouldn't be used. Use a RadioGroup ancestor to manage group value instead. This feature was deprecated after v3.32.0-0.0.pre - lib\features\settings\calendar_settings_screen.dart:152:25 - deprecated_member_use
+   info - 'onChanged' is deprecated and shouldn't be used. Use RadioGroup to handle value change instead. This feature was deprecated after v3.32.0-0.0.pre - lib\features\settings\calendar_settings_screen.dart:153:25 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\settings\calendar_settings_screen.dart:304:36 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\settings\calendar_settings_screen.dart:306:55 - deprecated_member_use
+   info - 'groupValue' is deprecated and shouldn't be used. Use a RadioGroup ancestor to manage group value instead. This feature was deprecated after v3.32.0-0.0.pre - lib\features\settings\calendar_settings_screen.dart:351:7 - deprecated_member_use
+   info - 'onChanged' is deprecated and shouldn't be used. Use RadioGroup to handle value change instead. This feature was deprecated after v3.32.0-0.0.pre - lib\features\settings\calendar_settings_screen.dart:352:7 - deprecated_member_use
+warning - Unused import: '../../data/repositories/transaction_repository.dart' - lib\features\settings\settings_screen.dart:11:8 - unused_import
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\settings\settings_screen.dart:355:44 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\settings\settings_screen.dart:357:63 - deprecated_member_use
+warning - Unused import: '../../shared/widgets/banner_ad_widget.dart' - lib\features\statistics\statistics_screen.dart:9:8 - unused_import
+   info - Unnecessary use of multiple underscores - lib\features\statistics\statistics_screen.dart:55:20 - unnecessary_underscores
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\statistics\statistics_screen.dart:179:37 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\features\statistics\statistics_screen.dart:203:50 - deprecated_member_use
+warning - Unused import: 'package:flutter/foundation.dart' - lib\shared\widgets\banner_ad_widget.dart:1:8 - unused_import
+warning - Unused import: '../../data/services/ad_service.dart' - lib\shared\widgets\banner_ad_widget.dart:4:8 - unused_import
+warning - Unused import: '../../data/services/purchase_service.dart' - lib\shared\widgets\banner_ad_widget.dart:5:8 - unused_import
+warning - Unused import: '../../core/entitlements.dart' - lib\shared\widgets\banner_ad_widget.dart:6:8 - unused_import
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\shared\widgets\common_widgets.dart:27:33 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\shared\widgets\common_widgets.dart:72:42 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\shared\widgets\receipt_image_viewer_native.dart:46:57 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\shared\widgets\receipt_image_viewer_native.dart:55:42 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\shared\widgets\receipt_image_viewer_web.dart:33:32 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\shared\widgets\receipt_image_viewer_web.dart:35:51 - deprecated_member_use
+  error - The name 'MyApp' isn't a class - test\widget_test.dart:16:35 - creation_with_non_type
+
+80 issues found. (ran in 2.4s)
