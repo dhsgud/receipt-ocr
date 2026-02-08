@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>개인정보처리방침 - 김동한 가계부</title>
+    <style>
+        :root {
+            --primary-color: #F5A623;
+            --bg-color: #1a1a2e;
+            --card-bg: #16213e;
+            --text-color: #e8e8e8;
+            --text-muted: #a0a0a0;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: linear-gradient(135deg, var(--bg-color) 0%, #0f0f23 100%);
+            color: var(--text-color);
+            line-height: 1.8;
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+        
+        header {
+            text-align: center;
+            margin-bottom: 40px;
+            padding: 30px;
+            background: var(--card-bg);
+            border-radius: 16px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+        
+        h1 {
+            color: var(--primary-color);
+            font-size: 2rem;
+            margin-bottom: 10px;
+        }
+        
+        .app-name {
+            font-size: 1.1rem;
+            color: var(--text-muted);
+        }
+        
+        .update-date {
+            font-size: 0.9rem;
+            color: var(--text-muted);
+            margin-top: 10px;
+        }
+        
+        section {
+            background: var(--card-bg);
+            border-radius: 12px;
+            padding: 25px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+            transition: transform 0.2s ease;
+        }
+        
+        section:hover {
+            transform: translateY(-2px);
+        }
+        
+        h2 {
+            color: var(--primary-color);
+            font-size: 1.3rem;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid rgba(245, 166, 35, 0.3);
+        }
+        
+        h3 {
+            color: var(--text-color);
+            font-size: 1.1rem;
+            margin: 15px 0 10px 0;
+        }
+        
+        ul {
+            padding-left: 25px;
+            margin: 10px 0;
+        }
+        
+        li {
+            margin: 8px 0;
+            color: var(--text-muted);
+        }
+        
+        li strong {
+            color: var(--text-color);
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+        }
+        
+        th, td {
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        th {
+            background: rgba(245, 166, 35, 0.2);
+            color: var(--primary-color);
+            font-weight: 600;
+        }
+        
+        td {
+            color: var(--text-muted);
+        }
+        
+        .contact-info {
+            background: linear-gradient(135deg, rgba(245, 166, 35, 0.2), rgba(245, 166, 35, 0.05));
+            border: 1px solid rgba(245, 166, 35, 0.3);
+        }
+        
+        .contact-info a {
+            color: var(--primary-color);
+            text-decoration: none;
+        }
+        
+        .contact-info a:hover {
+            text-decoration: underline;
+        }
+        
+        footer {
+            text-align: center;
+            padding: 30px;
+            color: var(--text-muted);
+            font-size: 0.9rem;
+        }
+        
+        @media (max-width: 600px) {
+            .container {
+                padding: 20px 15px;
+            }
+            
+            h1 {
+                font-size: 1.6rem;
+            }
+            
+            section {
+                padding: 20px;
+            }
+            
+            table {
+                font-size: 0.9rem;
+            }
+            
+            th, td {
+                padding: 8px 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📋 개인정보처리방침</h1>
+            <div class="app-name">김동한 가계부</div>
+            <div class="update-date">최종 수정일: 2026년 2월 7일</div>
+        </header>
+
+        <section>
+            <h2>1. 수집하는 개인정보</h2>
+            
+            <h3>자동으로 수집되는 정보</h3>
+            <ul>
+                <li><strong>기기 정보</strong>: 기기 식별자, 운영체제 버전, 앱 버전</li>
+                <li><strong>사용 정보</strong>: 앱 사용 통계, 오류 로그</li>
+            </ul>
+            
+            <h3>사용자가 제공하는 정보</h3>
+            <ul>
+                <li><strong>영수증 이미지</strong>: 지출 내역 분석을 위해 촬영하거나 선택한 영수증 이미지</li>
+                <li><strong>거래 정보</strong>: 사용자가 직접 입력한 수입/지출 내역, 카테고리, 메모</li>
+                <li><strong>캘린더 정보</strong>: 거래 내역을 캘린더와 연동 시 (사용자 동의 하에)</li>
+            </ul>
+        </section>
+
+        <section>
+            <h2>2. 개인정보의 이용 목적</h2>
+            <ul>
+                <li>가계부 기능 제공 및 지출 분석</li>
+                <li>영수증 OCR 처리를 통한 자동 데이터 입력</li>
+                <li>맞춤형 예산 관리 및 지출 알림</li>
+                <li>앱 성능 개선 및 오류 수정</li>
+                <li>광고 표시 (무료 버전)</li>
+            </ul>
+        </section>
+
+        <section>
+            <h2>3. 개인정보의 보관 및 저장</h2>
+            <ul>
+                <li><strong>로컬 저장</strong>: 거래 정보 및 설정은 사용자의 기기에 로컬로 저장됩니다.</li>
+                <li><strong>이미지 처리</strong>: 영수증 이미지는 OCR 분석을 위해 임시로 처리되며, 분석 후 서버에 저장되지 않습니다.</li>
+                <li><strong>보관 기간</strong>: 사용자가 앱을 삭제하거나 데이터를 초기화할 때까지 보관됩니다.</li>
+            </ul>
+        </section>
+
+        <section>
+            <h2>4. 개인정보의 제3자 제공</h2>
+            <p style="margin-bottom: 15px; color: var(--text-muted);">다음 서비스와 개인정보를 공유할 수 있습니다:</p>
+            <table>
+                <thead>
+                    <tr>
+                        <th>제공받는 자</th>
+                        <th>제공 목적</th>
+                        <th>제공 정보</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Google AdMob</td>
+                        <td>광고 제공</td>
+                        <td>기기 식별자, 광고 ID</td>
+                    </tr>
+                    <tr>
+                        <td>RevenueCat</td>
+                        <td>구독 관리</td>
+                        <td>구매 정보, 기기 식별자</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <section>
+            <h2>5. 사용자의 권리</h2>
+            <p style="margin-bottom: 10px; color: var(--text-muted);">사용자는 다음 권리를 행사할 수 있습니다:</p>
+            <ul>
+                <li><strong>열람권</strong>: 수집된 개인정보의 열람을 요청할 수 있습니다.</li>
+                <li><strong>정정권</strong>: 부정확한 정보의 정정을 요청할 수 있습니다.</li>
+                <li><strong>삭제권</strong>: 개인정보의 삭제를 요청할 수 있습니다.</li>
+                <li><strong>처리 거부권</strong>: 개인정보 처리를 거부할 수 있습니다.</li>
+            </ul>
+        </section>
+
+        <section>
+            <h2>6. 앱 권한</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>권한</th>
+                        <th>용도</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>📷 카메라</td>
+                        <td>영수증 촬영</td>
+                    </tr>
+                    <tr>
+                        <td>💾 저장소</td>
+                        <td>영수증 이미지 저장 및 불러오기</td>
+                    </tr>
+                    <tr>
+                        <td>🌐 인터넷</td>
+                        <td>OCR 분석 및 구독 관리</td>
+                    </tr>
+                    <tr>
+                        <td>📅 캘린더</td>
+                        <td>거래 내역 캘린더 연동 (선택)</td>
+                    </tr>
+                    <tr>
+                        <td>🔔 알림</td>
+                        <td>결제 알림 자동 등록 (선택)</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <section>
+            <h2>7. 아동의 개인정보</h2>
+            <p style="color: var(--text-muted);">본 앱은 만 14세 미만 아동의 개인정보를 의도적으로 수집하지 않습니다.</p>
+        </section>
+
+        <section>
+            <h2>8. 개인정보처리방침의 변경</h2>
+            <p style="color: var(--text-muted);">개인정보처리방침이 변경되는 경우, 앱 내 공지 또는 이 페이지를 통해 안내합니다.</p>
+        </section>
+
+        <section class="contact-info">
+            <h2>9. 연락처</h2>
+            <p style="color: var(--text-muted);">개인정보 관련 문의사항이 있으시면 아래로 연락해 주세요:</p>
+            <ul>
+                <li><strong>이메일</strong>: <a href="mailto:dhsgud0112@gmail.com">dhsgud0112@gmail.com</a></li>
+                <li><strong>개발자</strong>: 김동한</li>
+            </ul>
+        </section>
+
+        <footer>
+            <p>본 개인정보처리방침은 2026년 2월 7일부터 적용됩니다.</p>
+            <p style="margin-top: 10px;">© 2026 김동한 가계부. All rights reserved.</p>
+        </footer>
+    </div>
+</body>
+</html>
