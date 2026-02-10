@@ -464,7 +464,7 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
     
     final result = await showDialog<String>(
       context: context,
-      barrierDismissible: !isFreeExhausted,
+      barrierDismissible: true,
       builder: (context) => AlertDialog(
         title: Row(
           children: [
@@ -473,7 +473,16 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
               color: isFreeExhausted ? Colors.red : const Color(0xFF6366F1),
             ),
             const SizedBox(width: 8),
-            Text(isFreeExhausted ? 'OCR 횟수 소진' : '프리미엄 구독'),
+            Expanded(
+              child: Text(isFreeExhausted ? 'OCR 횟수 소진' : '프리미엄 구독'),
+            ),
+            IconButton(
+              icon: const Icon(Icons.close, size: 20),
+              onPressed: () => Navigator.of(context).pop(),
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(),
+              splashRadius: 18,
+            ),
           ],
         ),
         content: Column(
