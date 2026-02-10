@@ -624,6 +624,60 @@ class Category {
     );
   }
 
+  /// OCR 서버 응답 카테고리를 앱 카테고리 이름으로 매칭
+  /// Gemini가 '의료'를 반환하면 '건강/의료'로 매칭하는 등의 퍼지 매칭 수행
+  static String matchOcrCategory(String ocrCategory, {bool isIncome = false}) {
+    final input = ocrCategory.trim();
+    if (input.isEmpty) return '기타';
+
+    // 1) 정확히 일치하는 카테고리가 있으면 바로 반환
+    final categories = isIncome ? incomeCategories : [...expenseParentCategories, ...expenseSubcategories];
+    for (final c in categories) {
+      if (c.name == input) return c.name;
+    }
+
+    // 2) 부분 매칭: OCR 결과가 카테고리 이름에 포함되거나, 카테고리 이름이 OCR 결과에 포함
+    for (final c in categories) {
+      // '의료' → '건강/의료', '미용' → '의류/미용' 등
+      if (c.name.contains(input) || input.contains(c.name)) {
+        // 소분류면 대분류 이름 반환
+        if (c.isSubcategory) {
+          final parent = getParentCategory(c.id);
+          return parent?.name ?? c.name;
+        }
+        return c.name;
+      }
+    }
+
+    // 3) '/' 로 분리된 카테고리 부분 매칭 (건강/의료, 의류/미용, 여가/문화 등)
+    for (final c in expenseParentCategories) {
+      final parts = c.name.split('/');
+      for (final part in parts) {
+        if (part == input) return c.name;
+      }
+    }
+
+    // 4) 키워드 기반 매칭
+    final keywordMap = <String, String>{
+      '병원': '건강/의료', '약국': '건강/의료', '의원': '건강/의료', '치과': '건강/의료',
+      '안과': '건강/의료', '피부과': '건강/의료', '한의원': '건강/의료', '헬스': '건강/의료',
+      '카페': '식비', '커피': '식비', '편의점': '식비', '식당': '식비', '음식': '식비',
+      '배달': '식비', '치킨': '식비', '피자': '식비', '빵': '식비',
+      '마트': '생활용품', '다이소': '생활용품',
+      '옷': '의류/미용', '신발': '의류/미용', '화장품': '의류/미용', '미용실': '의류/미용',
+      '영화': '여가/문화', '공연': '여가/문화', '여행': '여가/문화', '서점': '여가/문화',
+      '주유': '교통비', '택시': '교통비', '버스': '교통비', '지하철': '교통비',
+      '학원': '교육', '등록금': '교육', '강의': '교육',
+      '보험': '보험', '세금': '세금/공과금', '공과금': '세금/공과금',
+      '대출': '금융', '수수료': '금융', '투자': '금융',
+    };
+    for (final entry in keywordMap.entries) {
+      if (input.contains(entry.key)) return entry.value;
+    }
+
+    return isIncome ? '기타수입' : '기타';
+  }
+
   /// Get categories by type
   static List<Category> getCategoriesByType(TransactionType type) {
     if (type == TransactionType.income) {

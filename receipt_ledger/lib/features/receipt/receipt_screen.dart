@@ -63,7 +63,10 @@ class BatchReceiptItem {
       date = data.date!;
     }
     if (data.category != null && data.category!.isNotEmpty) {
-      category = data.category!;
+      category = Category.matchOcrCategory(
+        data.category!,
+        isIncome: data.isIncome,
+      );
     } else {
       category = guessCategory(data.storeName ?? '');
     }
@@ -100,7 +103,7 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
   final _descriptionController = TextEditingController();
   final _amountController = TextEditingController();
   DateTime _selectedDate = DateTime.now();
-  String _selectedCategory = '기타';
+  String? _selectedCategory;
   bool _isIncome = false;
 
   @override
@@ -195,9 +198,12 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
           _selectedDate = receiptData.date!;
         }
         
-        // 서버에서 받은 카테고리가 있으면 사용, 없으면 상점명으로 추론
+        // 서버에서 받은 카테고리를 앱 카테고리에 매칭
         if (receiptData.category != null && receiptData.category!.isNotEmpty) {
-          _selectedCategory = receiptData.category!;
+          _selectedCategory = Category.matchOcrCategory(
+            receiptData.category!,
+            isIncome: receiptData.isIncome,
+          );
         } else {
           _selectedCategory = _guessCategory(receiptData.storeName ?? '');
         }
@@ -236,19 +242,8 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
   }
 
   String _guessCategory(String storeName) {
-    final lower = storeName.toLowerCase();
-    if (lower.contains('카페') || lower.contains('스타벅스') || lower.contains('커피')) {
-      return '카페';
-    } else if (lower.contains('편의점') || lower.contains('cu') || lower.contains('gs25') || lower.contains('세븐')) {
-      return '편의점';
-    } else if (lower.contains('마트') || lower.contains('이마트') || lower.contains('홈플러스')) {
-      return '마트';
-    } else if (lower.contains('약국') || lower.contains('병원') || lower.contains('의원')) {
-      return '의료';
-    } else if (lower.contains('주유') || lower.contains('택시') || lower.contains('버스')) {
-      return '교통';
-    }
-    return '기타';
+    // 상점명으로 카테고리 추론 (Category.matchOcrCategory 활용)
+    return Category.matchOcrCategory(storeName);
   }
 
   /// 다중 이미지 선택 (갤러리에서)
@@ -650,6 +645,12 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
         _receiptData = null;
         _errorMessage = null;
         _isProcessing = false;
+        // 폼 필드도 초기화
+        _descriptionController.clear();
+        _amountController.clear();
+        _selectedCategory = null;
+        _isIncome = false;
+        _selectedDate = DateTime.now();
       });
     }
   }
@@ -666,6 +667,13 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
     if (_descriptionController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('설명을 입력해주세요')),
+      );
+      return;
+    }
+
+    if (_selectedCategory == null || _selectedCategory!.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('카테고리를 선택해주세요')),
       );
       return;
     }
@@ -743,7 +751,7 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
     final transaction = TransactionModel(
       id: const Uuid().v4(),
       date: _selectedDate,
-      category: _selectedCategory,
+      category: _selectedCategory ?? '기타',
       amount: amount,
       description: _descriptionController.text,
       receiptImagePath: _pickedFile?.path,
@@ -761,7 +769,7 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
     if (mounted) {
       budgetAlertService.setContext(context);
       await budgetAlertService.checkBudgetAndNotify(
-        categoryId: _selectedCategory,
+        categoryId: _selectedCategory ?? '기타',
         isIncome: _isIncome,
       );
     }
@@ -787,7 +795,7 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
         _receiptData = null;
         _descriptionController.clear();
         _amountController.clear();
-        _selectedCategory = '기타';
+        _selectedCategory = null;
         _isIncome = false;
       });
     }
