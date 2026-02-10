@@ -88,7 +88,11 @@ class SubscriptionNotifier extends StateNotifier<SubscriptionState> {
       }
       
       // RevenueCat 설정
-      await Purchases.setLogLevel(LogLevel.debug);
+      await Purchases.setLogLevel(
+        const bool.fromEnvironment('dart.vm.product') 
+            ? LogLevel.error 
+            : LogLevel.debug
+      );
       
       final config = PurchasesConfiguration(revenueCatApiKey);
       await Purchases.configure(config);

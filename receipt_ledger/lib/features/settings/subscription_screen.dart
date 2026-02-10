@@ -76,11 +76,7 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
                     _buildSubscriptionDetailsCard(subscription),
                   ],
 
-                  // 디버그 섹션 (개발 중에만)
-                  if (!const bool.fromEnvironment('dart.vm.product')) ...[
-                    const SizedBox(height: 32),
-                    _buildDebugSection(subscription),
-                  ],
+                  // 디버그 섹션 제거됨 (프로덕션 룩앤필)
                 ],
               ),
             ),
@@ -325,108 +321,76 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
   /// 구독 상세 정보
   Widget _buildSubscriptionDetailsCard(SubscriptionState subscription) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: Theme.of(context).cardColor,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            '구독 정보',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const Divider(),
-          _buildInfoRow('상품', subscription.activeProductId ?? '-'),
-          if (subscription.expirationDate != null)
-            _buildInfoRow('만료일', _formatDate(subscription.expirationDate!)),
-          if (subscription.customerInfo?.originalAppUserId != null)
-            _buildInfoRow(
-              '사용자 ID',
-              subscription.customerInfo!.originalAppUserId,
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildInfoRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label, style: TextStyle(color: Colors.grey[600])),
-          Text(
-            value,
-            style: const TextStyle(fontWeight: FontWeight.w500),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 5),
           ),
         ],
-      ),
-    );
-  }
-
-  /// 디버그 섹션
-  Widget _buildDebugSection(SubscriptionState subscription) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.orange.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Row(
             children: [
-              Icon(Icons.bug_report, color: Colors.orange),
+              Icon(Icons.receipt_long, color: Color(0xFF6366F1)),
               SizedBox(width: 8),
               Text(
-                '디버그 (개발용)',
+                '내 구독 정보',
                 style: TextStyle(
+                  fontSize: 16,
                   fontWeight: FontWeight.bold,
-                  color: Colors.orange,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 12),
-          Text(
-            'Tier: ${subscription.tier}\n'
-            'Is Premium: ${subscription.tier != SubscriptionTier.free}\n'
-            'Product: ${subscription.activeProductId ?? "none"}',
-            style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
-          ),
+          const SizedBox(height: 16),
+          const Divider(),
           const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            children: [
-              TextButton(
-                onPressed: () {
-                  ref.read(quotaProvider.notifier).resetQuota();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('쿼터 리셋됨')),
-                  );
-                },
-                child: const Text('Reset Quota'),
-              ),
-              TextButton(
-                onPressed: () {
-                  ref.read(subscriptionProvider.notifier).checkSubscriptionStatus();
-                },
-                child: const Text('Refresh Status'),
-              ),
-            ],
+          _buildInfoRow(
+            '이용 중인 플랜', 
+            subscription.isLifetime ? '평생 이용권' : '프리미엄 (Basic)',
+            isBold: true,
+          ),
+          if (subscription.expirationDate != null)
+            _buildInfoRow(
+              '다음 결제일', 
+              _formatDate(subscription.expirationDate!)
+            ),
+          
+          if (subscription.tier == SubscriptionTier.free)
+             _buildInfoRow('상태', '무료 버전 사용 중'),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoRow(String label, String value, {bool isBold = false}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: TextStyle(color: Colors.grey[600], fontSize: 15)),
+          Text(
+            value,
+            style: TextStyle(
+              fontWeight: isBold ? FontWeight.bold : FontWeight.w500,
+              fontSize: 15,
+              color: isBold ? const Color(0xFF6366F1) : null,
+            ),
           ),
         ],
       ),
     );
   }
+
+
 
   // ===========================================================================
   // Actions

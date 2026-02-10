@@ -749,7 +749,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 StyledCard(
                   child: Column(
                     children: [
-                      _buildInfoRow('버전', '1.0.0'),
+                      _buildInfoRow('버전', '0.1.0'),
                       const Divider(height: 24),
                       _buildInfoRow('개발자', '김동한'),
                       const Divider(height: 24),

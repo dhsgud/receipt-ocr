@@ -89,9 +89,9 @@ class AdNotifier extends StateNotifier<AdState> {
       // 메시지를 확인하여 실제 디바이스 해시 ID를 아래에 추가하세요.
       await MobileAds.instance.updateRequestConfiguration(
         RequestConfiguration(
-          testDeviceIds: [
-            'F84A7F5F2A7EBC7EDD9709EA35F339F2', // 실제 테스트 디바이스 해시 ID
-          ],
+          testDeviceIds: const bool.fromEnvironment('dart.vm.product')
+              ? []
+              : ['F84A7F5F2A7EBC7EDD9709EA35F339F2'],
         ),
       );
       debugPrint('[AdService] ✅ Test device configuration set');

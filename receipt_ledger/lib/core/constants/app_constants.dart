@@ -9,7 +9,7 @@ class AppConstants {
   
   // App Info
   static const String appName = 'Receipt Ledger';
-  static const String appVersion = '1.0.0';
+  static const String appVersion = '0.1.0';
   
   // Default Categories
   static const List<String> defaultCategories = [

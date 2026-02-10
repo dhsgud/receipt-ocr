@@ -8,7 +8,9 @@ library;
 // ============================================================================
 
 /// RevenueCat API Key (모든 플랫폼에서 동일한 키 사용)
-const String revenueCatApiKey = 'test_XrYkyXGIFqIDKMEuoLJElJcLUPb';
+const String revenueCatApiKey = bool.fromEnvironment('dart.vm.product')
+    ? 'goog_cmNZaYwgXEHhVCWWixvBbyGNIVI' // Production (Google Play)
+    : 'test_XrYkyXGIFqIDKMEuoLJElJcLUPb'; // Test Store (Debug)
 
 // ============================================================================
 // Entitlement Identifiers
@@ -134,7 +136,7 @@ class AdConfig {
   static const String bannerAdUnitIdAndroid = 'ca-app-pub-1570373945115921/9288437588';
   
   /// 실제 리워드 광고 ID (AdMob에서 생성 필요)
-  static const String rewardedAdUnitIdAndroid = 'ca-app-pub-3940256099942544/5224354917'; // TODO: 실제 ID로 교체
+  static const String rewardedAdUnitIdAndroid = 'ca-app-pub-1570373945115921/5269593106';
   
   /// 광고 표시 여부 (Free 등급만 true)
   static bool shouldShowAds(SubscriptionTier tier) {
