@@ -731,6 +731,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 child: Center(child: Text('오류가 발생했습니다')),
               ),
             ),
+            ),
+            const SliverToBoxAdapter(child: SizedBox(height: 120)),
           ],
         ),
       ),

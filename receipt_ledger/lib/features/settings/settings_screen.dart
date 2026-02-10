@@ -183,7 +183,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       body: !_isInitialized
           ? const Center(child: CircularProgressIndicator())
           : ListView(
-              padding: const EdgeInsets.all(20),
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 120),
               children: [
                 // Subscription Section
                 const Text(
