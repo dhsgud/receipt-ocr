@@ -6,14 +6,14 @@ import '../../data/models/category.dart';
 import '../../data/models/fixed_expense.dart';
 
 /// 고정비 관리 화면
-class FixedExpenseScreen extends ConsumerStatefulWidget {
-  const FixedExpenseScreen({super.key});
+class FixedExpenseView extends ConsumerStatefulWidget {
+  const FixedExpenseView({super.key});
 
   @override
-  ConsumerState<FixedExpenseScreen> createState() => _FixedExpenseScreenState();
+  ConsumerState<FixedExpenseView> createState() => _FixedExpenseViewState();
 }
 
-class _FixedExpenseScreenState extends ConsumerState<FixedExpenseScreen> {
+class _FixedExpenseViewState extends ConsumerState<FixedExpenseView> {
   final _currencyFormat = NumberFormat.currency(locale: 'ko_KR', symbol: '₩');
   List<FixedExpense> _fixedExpenses = [];
 
@@ -36,9 +36,7 @@ class _FixedExpenseScreenState extends ConsumerState<FixedExpenseScreen> {
     final totalMonthly = _calculateMonthlyTotal();
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('고정비 관리'),
-      ),
+      backgroundColor: Colors.transparent,
       body: Column(
         children: [
           // 월 고정비 총액 카드

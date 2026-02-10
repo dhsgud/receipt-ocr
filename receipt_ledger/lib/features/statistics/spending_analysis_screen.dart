@@ -7,16 +7,17 @@ import '../../data/models/category.dart';
 import '../../shared/providers/app_providers.dart';
 
 /// 고급 소비 분석 화면
-class SpendingAnalysisScreen extends ConsumerStatefulWidget {
-  const SpendingAnalysisScreen({super.key});
+/// 고급 소비 분석 화면
+class SpendingAnalysisView extends ConsumerStatefulWidget {
+  const SpendingAnalysisView({super.key});
 
   @override
-  ConsumerState<SpendingAnalysisScreen> createState() =>
-      _SpendingAnalysisScreenState();
+  ConsumerState<SpendingAnalysisView> createState() =>
+      _SpendingAnalysisViewState();
 }
 
-class _SpendingAnalysisScreenState
-    extends ConsumerState<SpendingAnalysisScreen>
+class _SpendingAnalysisViewState
+    extends ConsumerState<SpendingAnalysisView>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   final _currencyFormat = NumberFormat.currency(locale: 'ko_KR', symbol: '₩');
@@ -35,26 +36,30 @@ class _SpendingAnalysisScreenState
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('소비 분석'),
-        bottom: TabBar(
-          controller: _tabController,
-          tabs: const [
-            Tab(text: '월별 트렌드'),
-            Tab(text: '전월 비교'),
-            Tab(text: '카테고리 분석'),
-          ],
+    return Column(
+      children: [
+        Container(
+          color: Theme.of(context).cardColor,
+          child: TabBar(
+            controller: _tabController,
+            tabs: const [
+              Tab(text: '월별 트렌드'),
+              Tab(text: '전월 비교'),
+              Tab(text: '카테고리 분석'),
+            ],
+          ),
         ),
-      ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          _buildMonthlyTrendTab(),
-          _buildComparisonTab(),
-          _buildCategoryAnalysisTab(),
-        ],
-      ),
+        Expanded(
+          child: TabBarView(
+            controller: _tabController,
+            children: [
+              _buildMonthlyTrendTab(),
+              _buildComparisonTab(),
+              _buildCategoryAnalysisTab(),
+            ],
+          ),
+        ),
+      ],
     );
   }
 

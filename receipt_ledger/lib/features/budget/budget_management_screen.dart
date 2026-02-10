@@ -6,16 +6,16 @@ import '../../data/models/category.dart';
 import '../../data/models/budget.dart';
 
 /// 예산 관리 화면
-class BudgetManagementScreen extends ConsumerStatefulWidget {
-  const BudgetManagementScreen({super.key});
+class BudgetManagementView extends ConsumerStatefulWidget {
+  const BudgetManagementView({super.key});
 
   @override
-  ConsumerState<BudgetManagementScreen> createState() =>
-      _BudgetManagementScreenState();
+  ConsumerState<BudgetManagementView> createState() =>
+      _BudgetManagementViewState();
 }
 
-class _BudgetManagementScreenState
-    extends ConsumerState<BudgetManagementScreen> {
+class _BudgetManagementViewState
+    extends ConsumerState<BudgetManagementView> {
   late int _selectedYear;
   late int _selectedMonth;
   Budget? _currentBudget;
@@ -45,32 +45,20 @@ class _BudgetManagementScreenState
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('예산 관리'),
-        actions: [
-          IconButton(
-            onPressed: _showMonthPicker,
-            icon: const Icon(Icons.calendar_month),
-            tooltip: '월 선택',
-          ),
-        ],
-      ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          // 월 선택 헤더
-          _buildMonthHeader(),
-          const SizedBox(height: 24),
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        // 월 선택 헤더
+        _buildMonthHeader(),
+        const SizedBox(height: 24),
 
-          // 총 예산 설정
-          _buildTotalBudgetCard(),
-          const SizedBox(height: 24),
+        // 총 예산 설정
+        _buildTotalBudgetCard(),
+        const SizedBox(height: 24),
 
-          // 카테고리별 예산 설정
-          _buildCategoryBudgetSection(),
-        ],
-      ),
+        // 카테고리별 예산 설정
+        _buildCategoryBudgetSection(),
+      ],
     );
   }
 

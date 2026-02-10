@@ -11,10 +11,9 @@ import 'calendar_settings_screen.dart';
 import 'subscription_screen.dart';
 
 import 'category_management_screen.dart';
-import '../budget/budget_management_screen.dart';
-import 'fixed_expense_screen.dart';
-import '../statistics/spending_analysis_screen.dart';
+import 'category_dashboard_screen.dart';
 import '../../data/services/purchase_service.dart';
+import '../../data/services/quota_service.dart';
 import '../../data/services/quota_service.dart';
 import '../../core/entitlements.dart';
 
@@ -299,7 +298,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
                 // Category Management Section
                 const Text(
-                  '카테고리 관리',
+                  '카테고리 및 예산 관리',
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
@@ -312,20 +311,20 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => const CategoryManagementScreen(),
+                        builder: (_) => const CategoryDashboardScreen(),
                       ),
                     );
                   },
                   child: const Row(
                     children: [
-                      Icon(Icons.category, color: AppColors.primary),
+                      Icon(Icons.dashboard_customize, color: AppColors.primary),
                       SizedBox(width: 12),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              '카테고리 설정',
+                              '통합 관리 대시보드',
                               style: TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w500,
@@ -333,174 +332,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                             ),
                             SizedBox(height: 2),
                             Text(
-                              '지출/수입 카테고리 관리',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.grey,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Icon(Icons.chevron_right, color: Colors.grey),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 12),
-                StyledCard(
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const BudgetManagementScreen(),
-                      ),
-                    );
-                  },
-                  child: const Row(
-                    children: [
-                      Icon(Icons.account_balance_wallet, color: AppColors.income),
-                      SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              '예산 설정',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                            SizedBox(height: 2),
-                            Text(
-                              '월별 예산 및 카테고리별 예산 관리',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.grey,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Icon(Icons.chevron_right, color: Colors.grey),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 12),
-                // 예산 초과 알림 토글
-                Consumer(
-                  builder: (context, ref, _) {
-                    final isEnabled = ref.watch(budgetAlertEnabledProvider);
-                    return StyledCard(
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.notifications_active,
-                            color: isEnabled ? Colors.orange : Colors.grey,
-                          ),
-                          const SizedBox(width: 12),
-                          const Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  '예산 초과 알림',
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                                SizedBox(height: 2),
-                                Text(
-                                  '80% 경고, 100% 초과 시 알림',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: Colors.grey,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          Switch.adaptive(
-                            value: isEnabled,
-                            onChanged: (value) {
-                              ref.read(budgetAlertEnabledProvider.notifier).state = value;
-                            },
-                            activeTrackColor: Colors.orange,
-                          ),
-                        ],
-                      ),
-                    );
-                  },
-                ),
-                const SizedBox(height: 12),
-                StyledCard(
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const FixedExpenseScreen(),
-                      ),
-                    );
-                  },
-                  child: const Row(
-                    children: [
-                      Icon(Icons.repeat, color: Colors.orange),
-                      SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              '고정비 관리',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                            SizedBox(height: 2),
-                            Text(
-                              '정기 결제 항목 관리',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.grey,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Icon(Icons.chevron_right, color: Colors.grey),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 12),
-                StyledCard(
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const SpendingAnalysisScreen(),
-                      ),
-                    );
-                  },
-                  child: const Row(
-                    children: [
-                      Icon(Icons.analytics, color: Colors.purple),
-                      SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              '고급 분석',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                            SizedBox(height: 2),
-                            Text(
-                              '월별 트렌드, 전월 비교, 카테고리 분석',
+                              '카테고리, 예산, 고정비, 지출 분석',
                               style: TextStyle(
                                 fontSize: 12,
                                 color: Colors.grey,
@@ -919,9 +751,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     children: [
                       _buildInfoRow('버전', '1.0.0'),
                       const Divider(height: 24),
-                      _buildInfoRow('개발자', 'Receipt Ledger Team'),
+                      _buildInfoRow('개발자', '김동한'),
                       const Divider(height: 24),
-                      _buildInfoRow('플랫폼', kIsWeb ? 'Web' : 'Mobile'),
+                      _buildInfoRow('문의 사항', 'fastfeelfreeai@gmail.com'),
                     ],
                   ),
                 ),

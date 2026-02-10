@@ -4,16 +4,16 @@ import '../../data/models/category.dart';
 
 /// 카테고리 관리 화면
 /// 사용자 정의 카테고리 추가, 수정, 삭제 기능 제공
-class CategoryManagementScreen extends ConsumerStatefulWidget {
-  const CategoryManagementScreen({super.key});
+class CategoryManagementView extends ConsumerStatefulWidget {
+  const CategoryManagementView({super.key});
 
   @override
-  ConsumerState<CategoryManagementScreen> createState() =>
-      _CategoryManagementScreenState();
+  ConsumerState<CategoryManagementView> createState() =>
+      _CategoryManagementViewState();
 }
 
-class _CategoryManagementScreenState
-    extends ConsumerState<CategoryManagementScreen>
+class _CategoryManagementViewState
+    extends ConsumerState<CategoryManagementView>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
 
@@ -31,24 +31,28 @@ class _CategoryManagementScreenState
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('카테고리 관리'),
-        bottom: TabBar(
-          controller: _tabController,
-          tabs: const [
-            Tab(text: '지출 카테고리'),
-            Tab(text: '수입 카테고리'),
-          ],
+    return Column(
+      children: [
+        Container(
+          color: Theme.of(context).cardColor,
+          child: TabBar(
+            controller: _tabController,
+            tabs: const [
+              Tab(text: '지출 카테고리'),
+              Tab(text: '수입 카테고리'),
+            ],
+          ),
         ),
-      ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          _buildExpenseCategoryList(),
-          _buildIncomeCategoryList(),
-        ],
-      ),
+        Expanded(
+          child: TabBarView(
+            controller: _tabController,
+            children: [
+              _buildExpenseCategoryList(),
+              _buildIncomeCategoryList(),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
