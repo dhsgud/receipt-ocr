@@ -152,14 +152,14 @@ class AdConfig {
 class SubscriptionFeatures {
   /// Free 등급 기능
   static const List<String> freeFeatures = [
-    '영수증 OCR 5회 무료',
+    '영수증 업로드 5회 무료',
     '광고 시청으로 추가 기회 획득',
     '로컬 데이터 저장',
   ];
   
   /// Basic 등급 기능
   static const List<String> basicFeatures = [
-    '무제한 영수증 OCR',
+    '무제한 영수증 업로드',
     '광고 제거',
     '클라우드 동기화',
     '멀티 디바이스 지원',

@@ -37,6 +37,8 @@ class ReceiptOCR:
             self.gemini_keys.append(os.environ.get("GEMINI_API_KEY_1"))
         if os.environ.get("GEMINI_API_KEY_2"):
             self.gemini_keys.append(os.environ.get("GEMINI_API_KEY_2"))
+        if os.environ.get("GEMINI_API_KEY_3"):
+            self.gemini_keys.append(os.environ.get("GEMINI_API_KEY_3"))
 
     def _call_gemini_text(self, text: str) -> Optional[Dict[str, Any]]:
         """Gemini에게 텍스트 구조화 요청 (저비용)"""
