@@ -98,14 +98,47 @@ class TransactionModel(BaseModel):
     isSynced: int = 1
 
 
+class BudgetModel(BaseModel):
+    id: str
+    year: int
+    month: int
+    totalBudget: float
+    categoryBudgets: str  # JSON string
+    ownerKey: str
+    createdAt: str
+    updatedAt: str
+    isSynced: int = 1
+
+
+class FixedExpenseModel(BaseModel):
+    id: str
+    name: str
+    amount: float
+    categoryId: str
+    paymentDay: int
+    frequency: int
+    isActive: int
+    autoRecord: int
+    memo: Optional[str] = None
+    ownerKey: str
+    createdAt: str
+    updatedAt: str
+    lastRecordedDate: Optional[str] = None
+    isSynced: int = 1
+
+
 class SyncRequest(BaseModel):
-    transactions: list[TransactionModel]
+    transactions: list[TransactionModel] = []
+    budgets: list[BudgetModel] = []
+    fixedExpenses: list[FixedExpenseModel] = []
     lastSyncTime: Optional[str] = None
 
 
 class SyncResponse(BaseModel):
     uploaded: int
     downloaded: list[TransactionModel]
+    downloadedBudgets: list[dict] = []
+    downloadedFixedExpenses: list[dict] = []
     serverTime: str
 
 
@@ -136,6 +169,37 @@ def init_db():
                 ownerKey TEXT NOT NULL,
                 createdAt TEXT NOT NULL,
                 updatedAt TEXT NOT NULL,
+                serverUpdatedAt TEXT NOT NULL
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS budgets (
+                id TEXT PRIMARY KEY,
+                year INTEGER NOT NULL,
+                month INTEGER NOT NULL,
+                totalBudget REAL NOT NULL,
+                categoryBudgets TEXT DEFAULT '{}',
+                ownerKey TEXT NOT NULL,
+                createdAt TEXT NOT NULL,
+                updatedAt TEXT NOT NULL,
+                serverUpdatedAt TEXT NOT NULL
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS fixed_expenses (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                amount REAL NOT NULL,
+                categoryId TEXT NOT NULL,
+                paymentDay INTEGER NOT NULL,
+                frequency INTEGER DEFAULT 0,
+                isActive INTEGER DEFAULT 1,
+                autoRecord INTEGER DEFAULT 0,
+                memo TEXT,
+                ownerKey TEXT NOT NULL,
+                createdAt TEXT NOT NULL,
+                updatedAt TEXT NOT NULL,
+                lastRecordedDate TEXT,
                 serverUpdatedAt TEXT NOT NULL
             )
         """)
@@ -467,6 +531,7 @@ async def sync_transactions(
     uploaded_count = 0
     
     with get_db() as conn:
+        # Upload transactions
         for t in request.transactions:
             conn.execute("""
                 INSERT INTO transactions 
@@ -491,6 +556,53 @@ async def sync_transactions(
             ))
             uploaded_count += 1
         
+        # Upload budgets
+        for b in request.budgets:
+            conn.execute("""
+                INSERT INTO budgets
+                (id, year, month, totalBudget, categoryBudgets, ownerKey,
+                 createdAt, updatedAt, serverUpdatedAt)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    totalBudget = excluded.totalBudget,
+                    categoryBudgets = excluded.categoryBudgets,
+                    updatedAt = excluded.updatedAt,
+                    serverUpdatedAt = excluded.serverUpdatedAt
+                WHERE excluded.updatedAt > budgets.updatedAt
+            """, (
+                b.id, b.year, b.month, b.totalBudget, b.categoryBudgets,
+                b.ownerKey, b.createdAt, b.updatedAt, server_time,
+            ))
+            uploaded_count += 1
+        
+        # Upload fixed expenses
+        for e in request.fixedExpenses:
+            conn.execute("""
+                INSERT INTO fixed_expenses
+                (id, name, amount, categoryId, paymentDay, frequency,
+                 isActive, autoRecord, memo, ownerKey, createdAt, updatedAt,
+                 lastRecordedDate, serverUpdatedAt)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    name = excluded.name,
+                    amount = excluded.amount,
+                    categoryId = excluded.categoryId,
+                    paymentDay = excluded.paymentDay,
+                    frequency = excluded.frequency,
+                    isActive = excluded.isActive,
+                    autoRecord = excluded.autoRecord,
+                    memo = excluded.memo,
+                    updatedAt = excluded.updatedAt,
+                    lastRecordedDate = excluded.lastRecordedDate,
+                    serverUpdatedAt = excluded.serverUpdatedAt
+                WHERE excluded.updatedAt > fixed_expenses.updatedAt
+            """, (
+                e.id, e.name, e.amount, e.categoryId, e.paymentDay,
+                e.frequency, e.isActive, e.autoRecord, e.memo, e.ownerKey,
+                e.createdAt, e.updatedAt, e.lastRecordedDate, server_time,
+            ))
+            uploaded_count += 1
+        
         conn.commit()
         
         # Build list of allowed owner keys (self + partner)
@@ -500,7 +612,7 @@ async def sync_transactions(
         if partner_key:
             allowed_keys.append(partner_key)
         
-        # Get transactions filtered by owner/partner keys
+        # Download transactions
         if allowed_keys:
             placeholders = ",".join("?" * len(allowed_keys))
             if request.lastSyncTime:
@@ -514,15 +626,66 @@ async def sync_transactions(
                     tuple(allowed_keys)
                 )
         else:
-            # No keys provided - return empty for security
             cursor = conn.execute("SELECT * FROM transactions WHERE 1=0")
         
         rows = cursor.fetchall()
         downloaded = [row_to_transaction(row) for row in rows]
+        
+        # Download budgets
+        downloaded_budgets = []
+        if allowed_keys:
+            placeholders = ",".join("?" * len(allowed_keys))
+            if request.lastSyncTime:
+                cursor = conn.execute(
+                    f"SELECT * FROM budgets WHERE ownerKey IN ({placeholders}) AND serverUpdatedAt > ?",
+                    (*allowed_keys, request.lastSyncTime)
+                )
+            else:
+                cursor = conn.execute(
+                    f"SELECT * FROM budgets WHERE ownerKey IN ({placeholders})",
+                    tuple(allowed_keys)
+                )
+            for row in cursor.fetchall():
+                downloaded_budgets.append({
+                    "id": row["id"], "year": row["year"], "month": row["month"],
+                    "totalBudget": row["totalBudget"],
+                    "categoryBudgets": row["categoryBudgets"],
+                    "ownerKey": row["ownerKey"],
+                    "createdAt": row["createdAt"], "updatedAt": row["updatedAt"],
+                    "isSynced": 1,
+                })
+        
+        # Download fixed expenses
+        downloaded_fixed = []
+        if allowed_keys:
+            placeholders = ",".join("?" * len(allowed_keys))
+            if request.lastSyncTime:
+                cursor = conn.execute(
+                    f"SELECT * FROM fixed_expenses WHERE ownerKey IN ({placeholders}) AND serverUpdatedAt > ?",
+                    (*allowed_keys, request.lastSyncTime)
+                )
+            else:
+                cursor = conn.execute(
+                    f"SELECT * FROM fixed_expenses WHERE ownerKey IN ({placeholders})",
+                    tuple(allowed_keys)
+                )
+            for row in cursor.fetchall():
+                downloaded_fixed.append({
+                    "id": row["id"], "name": row["name"],
+                    "amount": row["amount"], "categoryId": row["categoryId"],
+                    "paymentDay": row["paymentDay"], "frequency": row["frequency"],
+                    "isActive": row["isActive"], "autoRecord": row["autoRecord"],
+                    "memo": row["memo"], "ownerKey": row["ownerKey"],
+                    "createdAt": row["createdAt"], "updatedAt": row["updatedAt"],
+                    "lastRecordedDate": row["lastRecordedDate"],
+                    "isSynced": 1,
+                })
     
     return SyncResponse(
         uploaded=uploaded_count,
         downloaded=downloaded,
+        downloadedBudgets=downloaded_budgets,
+        downloadedFixedExpenses=downloaded_fixed,
         serverTime=server_time,
     )
 
