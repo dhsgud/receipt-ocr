@@ -10,10 +10,12 @@ import '../../data/models/category.dart';
 import '../../data/models/transaction.dart';
 import '../../data/models/receipt.dart';
 import '../../shared/providers/app_providers.dart';
-import '../settings/local_model_manager.dart';
+
 import '../settings/subscription_screen.dart';
 import '../../data/services/purchase_service.dart';
 import '../../data/services/quota_service.dart';
+import '../../data/services/budget_alert_service.dart';
+import '../../data/services/ad_service.dart';
 import '../../core/entitlements.dart';
 
 /// 일괄 처리용 영수증 아이템
@@ -162,59 +164,19 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
     try {
       ReceiptData receiptData;
       
-      // OCR 모드 및 설정 읽기
-      final ocrMode = ref.read(ocrModeProvider);
-      final modelState = ref.read(localModelManagerProvider);
-      final externalLlamaUrl = ref.read(externalLlamaUrlProvider);
+      // Gemini OCR 서버로 요청
       final ocrServerUrl = ref.read(ocrServerUrlProvider);
+      final provider = ref.read(ocrProviderProvider);
 
-      // 모드 결정
-      String effectiveMode;
-      switch (ocrMode) {
-        case OcrMode.local:
-          if (modelState.isModelLoaded) {
-            effectiveMode = 'local';
-          } else {
-            throw Exception('로컬 모델이 로드되지 않았습니다. 설정에서 모델을 먼저 로드해주세요.');
-          }
-          break;
-        case OcrMode.externalLlama:
-          effectiveMode = 'externalLlama';
-          break;
-        case OcrMode.server:
-          effectiveMode = 'server';
-          break;
-        case OcrMode.auto:
-        default:
-          // 자동: 로컬 > 외부 llama > OCR 서버
-          if (modelState.isModelLoaded) {
-            effectiveMode = 'local';
-          } else {
-            effectiveMode = 'auto'; // 외부 시도 후 서버로 폴백
-          }
-          break;
-      }
+      debugPrint('[OCR] Using Gemini OCR server...');
 
-      debugPrint('[OCR] Mode: $ocrMode, Effective: $effectiveMode');
-
-      if (effectiveMode == 'local') {
-        // 로컬 OCR 사용
-        debugPrint('[OCR] Using local OCR...');
-        final localOcrService = ref.read(localModelManagerProvider.notifier).localOcrService;
-        receiptData = await localOcrService.parseReceiptFromBytes(_imageBytes!);
-      } else {
-        // 서버 OCR 사용 (externalLlama, server, auto)
-        debugPrint('[OCR] Using server OCR ($effectiveMode)...');
-        final sllmService = ref.read(sllmServiceProvider);
-        receiptData = await sllmService.parseReceiptFromBytes(
-          _imageBytes!,
-          mode: effectiveMode,
-          externalLlamaUrl: externalLlamaUrl,
-          ocrServerUrl: ocrServerUrl,
-          provider: ref.read(ocrProviderProvider),
-          cancelToken: _ocrCancelToken,
-        );
-      }
+      final sllmService = ref.read(sllmServiceProvider);
+      receiptData = await sllmService.parseReceiptFromBytes(
+        _imageBytes!,
+        ocrServerUrl: ocrServerUrl,
+        provider: provider,
+        cancelToken: _ocrCancelToken,
+      );
 
       if (!mounted) return;
 
@@ -331,41 +293,9 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
       _isBatchProcessing = true;
     });
 
-    // OCR 설정 읽기
-    final ocrMode = ref.read(ocrModeProvider);
-    final modelState = ref.read(localModelManagerProvider);
-    final externalLlamaUrl = ref.read(externalLlamaUrlProvider);
+    // Gemini OCR 설정 읽기
     final ocrServerUrl = ref.read(ocrServerUrlProvider);
-
-    // 모드 결정
-    String effectiveMode;
-    switch (ocrMode) {
-      case OcrMode.local:
-        if (modelState.isModelLoaded) {
-          effectiveMode = 'local';
-        } else {
-          setState(() {
-            _isBatchProcessing = false;
-            _errorMessage = '로컬 모델이 로드되지 않았습니다.';
-          });
-          return;
-        }
-        break;
-      case OcrMode.externalLlama:
-        effectiveMode = 'externalLlama';
-        break;
-      case OcrMode.server:
-        effectiveMode = 'server';
-        break;
-      case OcrMode.auto:
-      default:
-        if (modelState.isModelLoaded) {
-          effectiveMode = 'local';
-        } else {
-          effectiveMode = 'auto';
-        }
-        break;
-    }
+    final provider = ref.read(ocrProviderProvider);
 
     // 모든 아이템을 처리 중 상태로 변경
     setState(() {
@@ -374,7 +304,7 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
       }
     });
 
-    // 병렬로 모든 영수증 처리
+    // 병렬로 모든 영수증 처리 (Gemini OCR)
     await Future.wait(
       _batchItems.asMap().entries.map((entry) async {
         final index = entry.key;
@@ -383,20 +313,12 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
         if (!mounted) return;
 
         try {
-          ReceiptData receiptData;
-
-          if (effectiveMode == 'local') {
-            final localOcrService = ref.read(localModelManagerProvider.notifier).localOcrService;
-            receiptData = await localOcrService.parseReceiptFromBytes(item.bytes);
-          } else {
-            final sllmService = ref.read(sllmServiceProvider);
-            receiptData = await sllmService.parseReceiptFromBytes(
-              item.bytes,
-              mode: effectiveMode,
-              externalLlamaUrl: externalLlamaUrl,
-              ocrServerUrl: ocrServerUrl,
-            );
-          }
+          final sllmService = ref.read(sllmServiceProvider);
+          final receiptData = await sllmService.parseReceiptFromBytes(
+            item.bytes,
+            ocrServerUrl: ocrServerUrl,
+            provider: provider,
+          );
 
           if (mounted) {
             setState(() {
@@ -486,6 +408,16 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
       );
 
       await repository.insertTransaction(transaction);
+      
+      // 예산 체크 및 알림
+      final budgetAlertService = BudgetAlertService(repository);
+      if (mounted) {
+        budgetAlertService.setContext(context);
+        await budgetAlertService.checkBudgetAndNotify(
+          categoryId: item.category,
+          isIncome: item.isIncome,
+        );
+      }
       savedCount++;
     }
 
@@ -523,18 +455,21 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
   /// 구독 유도 다이얼로그
   Future<void> _showSubscriptionDialog() async {
     final subscription = ref.read(subscriptionProvider);
-    final quotaNotifier = ref.read(quotaProvider.notifier);
+    final quotaState = ref.watch(quotaProvider);
+    final adNotifier = ref.read(adProvider.notifier);
     final tier = subscription.tier;
     
-    final remainingDaily = quotaNotifier.getRemainingDaily(tier);
-    final remainingMonthly = quotaNotifier.getRemainingMonthly(tier);
+    final remainingQuota = quotaState.getRemainingFreeQuota();
     
-    // Free 등급이고 총 사용량이 소진된 경우 (결제 필수)
-    final bool isFreeExhausted = tier == SubscriptionTier.free && remainingMonthly <= 0;
+    // Free 등급이고 총 사용량이 소진된 경우
+    final bool isFreeExhausted = tier == SubscriptionTier.free && remainingQuota <= 0;
+    
+    // 리워드 광고 준비 여부
+    final bool canWatchAd = adNotifier.isRewardedAdReady && isFreeExhausted;
     
     final result = await showDialog<String>(
       context: context,
-      barrierDismissible: !isFreeExhausted, // 결제 필수인 경우 닫기 불가
+      barrierDismissible: !isFreeExhausted,
       builder: (context) => AlertDialog(
         title: Row(
           children: [
@@ -543,48 +478,62 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
               color: isFreeExhausted ? Colors.red : const Color(0xFF6366F1),
             ),
             const SizedBox(width: 8),
-            Text(isFreeExhausted ? '구독 필요' : '프리미엄 구독'),
+            Text(isFreeExhausted ? 'OCR 횟수 소진' : '프리미엄 구독'),
           ],
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Free 등급 총 소진 시
             if (isFreeExhausted) ...[
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.red.withValues(alpha: 0.1),
+                  color: Colors.orange.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.red.withValues(alpha: 0.3)),
+                  border: Border.all(color: Colors.orange.withOpacity(0.3)),
                 ),
                 child: const Row(
                   children: [
-                    Icon(Icons.warning_amber, color: Colors.red),
+                    Icon(Icons.warning_amber, color: Colors.orange),
                     SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        '무료 체험 10회가 모두 소진되었습니다.\n계속 사용하려면 구독이 필요합니다.',
+                        '무료 체험 5회가 모두 소진되었습니다.',
                         style: TextStyle(fontWeight: FontWeight.w500),
                       ),
                     ),
                   ],
                 ),
               ),
-            ] else ...[
-              Text(
-                tier == SubscriptionTier.free
-                    ? '오늘 OCR 사용량이 소진되었습니다.\n(오늘: $remainingDaily회, 총: $remainingMonthly회 남음)'
-                    : '오늘 OCR 사용량이 소진되었습니다.\n(오늘: $remainingDaily회 남음)',
-                style: const TextStyle(fontSize: 15),
-              ),
+              const SizedBox(height: 16),
+              // 광고 시청 옵션
+              if (canWatchAd)
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.green.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Row(
+                    children: [
+                      Icon(Icons.play_circle_filled, color: Colors.green),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          '광고를 시청하면 1회 추가 사용 가능!',
+                          style: TextStyle(fontWeight: FontWeight.w500, color: Colors.green),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
             ],
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: const Color(0xFF6366F1).withValues(alpha: 0.1),
+                color: const Color(0xFF6366F1).withOpacity(0.1),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: const Column(
@@ -592,28 +541,32 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
                 children: [
                   Text('✨ 프리미엄 혜택', style: TextStyle(fontWeight: FontWeight.bold)),
                   SizedBox(height: 8),
-                  Text('• Basic: 일일 20회, 월 300회 + 광고 제거'),
-                  Text('• Pro: 일일 100회, 무제한 + 멀티디바이스'),
-                  Text('• 클라우드 동기화 & 상세 리포트'),
+                  Text('• 무제한 OCR 스캔'),
+                  Text('• 광고 제거'),
+                  Text('• 클라우드 동기화'),
+                  Text('• 멀티 디바이스 지원'),
                 ],
               ),
             ),
             const SizedBox(height: 12),
-            Text(
-              isFreeExhausted 
-                  ? '🔒 Basic ₩1,900/월부터 시작!'
-                  : (tier == SubscriptionTier.free 
-                      ? 'Basic ₩1,900/월부터 시작!'
-                      : 'Pro로 업그레이드 해보세요!'),
+            const Text(
+              '💰 월 ₩1,900 / 연 ₩19,000',
               style: TextStyle(
                 fontWeight: FontWeight.bold, 
-                color: isFreeExhausted ? Colors.red : const Color(0xFF6366F1),
+                color: Color(0xFF6366F1),
               ),
             ),
           ],
         ),
         actions: [
-          // Free 소진 시 수동 입력 버튼 제거
+          // 광고 시청 버튼
+          if (canWatchAd)
+            TextButton.icon(
+              onPressed: () => Navigator.of(context).pop('watchAd'),
+              icon: const Icon(Icons.play_circle_outline, color: Colors.green),
+              label: const Text('광고 보기', style: TextStyle(color: Colors.green)),
+            ),
+          // 수동 입력 버튼 (소진되지 않은 경우)
           if (!isFreeExhausted)
             TextButton(
               onPressed: () => Navigator.of(context).pop('manual'),
@@ -622,18 +575,35 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
           ElevatedButton(
             onPressed: () => Navigator.of(context).pop('subscribe'),
             style: ElevatedButton.styleFrom(
-              backgroundColor: isFreeExhausted ? Colors.red : const Color(0xFF6366F1),
+              backgroundColor: const Color(0xFF6366F1),
             ),
-            child: Text(
-              isFreeExhausted ? '지금 구독하기' : '구독하기', 
-              style: const TextStyle(color: Colors.white),
+            child: const Text(
+              '구독하기', 
+              style: TextStyle(color: Colors.white),
             ),
           ),
         ],
       ),
     );
 
-    if (result == 'subscribe' && mounted) {
+    if (!mounted) return;
+    
+    if (result == 'watchAd') {
+      // 광고 시청
+      final rewarded = await adNotifier.showRewardedAd(
+        onRewarded: () async {
+          await ref.read(quotaProvider.notifier).addBonusFromAd();
+        },
+      );
+      if (rewarded && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('🎉 OCR 1회가 추가되었습니다!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } else if (result == 'subscribe') {
       await Navigator.of(context).push(
         MaterialPageRoute(builder: (context) => const SubscriptionScreen()),
       );
@@ -785,6 +755,16 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
     );
 
     await repository.insertTransaction(transaction);
+    
+    // 예산 체크 및 알림
+    final budgetAlertService = BudgetAlertService(repository);
+    if (mounted) {
+      budgetAlertService.setContext(context);
+      await budgetAlertService.checkBudgetAndNotify(
+        categoryId: _selectedCategory,
+        isIncome: _isIncome,
+      );
+    }
 
     // Refresh providers
     ref.invalidate(transactionsProvider);
@@ -1680,49 +1660,278 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
     );
   }
 
+  /// 퀵 카테고리 ID 목록
+  static const _quickExpenseIds = ['food', 'housing', 'health'];
+  static const _quickIncomeIds = ['income_salary'];
+
   Widget _buildCategorySelector() {
-    final categories = Category.defaultCategories
-        .where((c) => c.name != '수입')
-        .toList();
+    // 지출/수입에 따라 퀵 카테고리 결정
+    final List<Category> quickCategories;
+    if (_isIncome) {
+      quickCategories = Category.incomeCategories
+          .where((c) => _quickIncomeIds.contains(c.id))
+          .toList();
+    } else {
+      quickCategories = Category.expenseParentCategories
+          .where((c) => _quickExpenseIds.contains(c.id))
+          .toList();
+    }
+
+    // 현재 선택된 카테고리가 퀵 목록에 없으면 표시용으로 추가
+    final selectedCat = (_isIncome ? Category.incomeCategories : Category.expenseParentCategories)
+        .cast<Category?>()
+        .firstWhere((c) => c?.name == _selectedCategory, orElse: () => null);
+    final bool isSelectedInQuick = quickCategories.any((c) => c.name == _selectedCategory);
 
     return Wrap(
       spacing: 8,
       runSpacing: 8,
-      children: categories.map((category) {
-        final isSelected = _selectedCategory == category.name;
-        return GestureDetector(
-          onTap: () => setState(() => _selectedCategory = category.name),
-          child: Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 10,
+      children: [
+        // 퀵 카테고리 칩들
+        ...quickCategories.map((category) {
+          final isSelected = _selectedCategory == category.name;
+          return GestureDetector(
+            onTap: () => setState(() => _selectedCategory = category.name),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              decoration: BoxDecoration(
+                color: isSelected
+                    ? category.color.withAlpha(50)
+                    : Theme.of(context).cardTheme.color,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: isSelected ? category.color : Colors.transparent,
+                  width: 2,
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(category.emoji, style: const TextStyle(fontSize: 16)),
+                  const SizedBox(width: 6),
+                  Text(
+                    category.name,
+                    style: TextStyle(
+                      fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                    ),
+                  ),
+                ],
+              ),
             ),
+          );
+        }),
+
+        // 퀵 목록에 없는 카테고리가 선택된 경우 해당 칩 표시
+        if (!isSelectedInQuick && selectedCat != null)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             decoration: BoxDecoration(
-              color: isSelected
-                  ? category.color.withAlpha(50)
-                  : Theme.of(context).cardTheme.color,
+              color: selectedCat.color.withAlpha(50),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: selectedCat.color, width: 2),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(selectedCat.emoji, style: const TextStyle(fontSize: 16)),
+                const SizedBox(width: 6),
+                Text(
+                  selectedCat.name,
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ],
+            ),
+          ),
+
+        // 더보기 버튼
+        GestureDetector(
+          onTap: () => _showCategorySearchSheet(),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            decoration: BoxDecoration(
+              color: Theme.of(context).cardTheme.color,
               borderRadius: BorderRadius.circular(20),
               border: Border.all(
-                color: isSelected ? category.color : Colors.transparent,
-                width: 2,
+                color: AppColors.primary.withAlpha(80),
+                width: 1.5,
               ),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(category.emoji, style: const TextStyle(fontSize: 16)),
+                Icon(Icons.search, size: 16, color: AppColors.primary),
                 const SizedBox(width: 6),
                 Text(
-                  category.name,
+                  '더보기',
                   style: TextStyle(
-                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
               ],
             ),
           ),
+        ),
+      ],
+    );
+  }
+
+  /// 카테고리 검색/선택 바텀시트
+  void _showCategorySearchSheet() {
+    String searchQuery = '';
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            // 지출/수입에 따라 카테고리 목록 결정
+            final allCategories = _isIncome
+                ? Category.incomeCategories
+                : Category.expenseParentCategories;
+
+            // 검색 필터링
+            final filtered = searchQuery.isEmpty
+                ? allCategories
+                : allCategories
+                    .where((c) =>
+                        c.name.contains(searchQuery) ||
+                        c.emoji.contains(searchQuery))
+                    .toList();
+
+            return Container(
+              height: MediaQuery.of(context).size.height * 0.65,
+              decoration: BoxDecoration(
+                color: Theme.of(context).scaffoldBackgroundColor,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+              ),
+              child: Column(
+                children: [
+                  // 핸들 바
+                  Container(
+                    margin: const EdgeInsets.only(top: 12),
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.withAlpha(80),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  // 타이틀
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+                    child: Row(
+                      children: [
+                        Text(
+                          _isIncome ? '수입 카테고리' : '지출 카테고리',
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const Spacer(),
+                        IconButton(
+                          onPressed: () => Navigator.pop(context),
+                          icon: const Icon(Icons.close),
+                          style: IconButton.styleFrom(
+                            backgroundColor: Colors.grey.withAlpha(30),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  // 검색 바
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: TextField(
+                      autofocus: false,
+                      onChanged: (value) => setSheetState(() => searchQuery = value),
+                      decoration: InputDecoration(
+                        hintText: '카테고리 검색...',
+                        prefixIcon: const Icon(Icons.search, size: 20),
+                        isDense: true,
+                        filled: true,
+                        fillColor: Theme.of(context).cardTheme.color,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide.none,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  // 카테고리 그리드
+                  Expanded(
+                    child: filtered.isEmpty
+                        ? Center(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.search_off, size: 48, color: Colors.grey.withAlpha(100)),
+                                const SizedBox(height: 8),
+                                const Text('검색 결과가 없습니다', style: TextStyle(color: Colors.grey)),
+                              ],
+                            ),
+                          )
+                        : GridView.builder(
+                            padding: const EdgeInsets.symmetric(horizontal: 20),
+                            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: 3,
+                              mainAxisSpacing: 10,
+                              crossAxisSpacing: 10,
+                              childAspectRatio: 2.4,
+                            ),
+                            itemCount: filtered.length,
+                            itemBuilder: (context, index) {
+                              final category = filtered[index];
+                              final isSelected = _selectedCategory == category.name;
+                              return GestureDetector(
+                                onTap: () {
+                                  setState(() => _selectedCategory = category.name);
+                                  Navigator.pop(context);
+                                },
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    color: isSelected
+                                        ? category.color.withAlpha(50)
+                                        : Theme.of(context).cardTheme.color,
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(
+                                      color: isSelected ? category.color : Colors.grey.withAlpha(40),
+                                      width: isSelected ? 2 : 1,
+                                    ),
+                                  ),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Text(category.emoji, style: const TextStyle(fontSize: 16)),
+                                      const SizedBox(width: 4),
+                                      Flexible(
+                                        child: Text(
+                                          category.name,
+                                          style: TextStyle(
+                                            fontSize: 13,
+                                            fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                                          ),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                  ),
+                ],
+              ),
+            );
+          },
         );
-      }).toList(),
+      },
     );
   }
 

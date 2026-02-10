@@ -64,12 +64,8 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
                     _buildFeaturesCard(),
                     const SizedBox(height: 24),
                     
-                    // RevenueCat Paywall 버튼 (메인 CTA)
+                    // RevenueCat Paywall 버튼
                     _buildPaywallButton(),
-                    const SizedBox(height: 16),
-                    
-                    // 수동 패키지 선택 (대안)
-                    _buildManualPackagesSection(subscription),
                   ],
 
                   // 프리미엄인 경우 Customer Center 표시
@@ -169,8 +165,8 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
           ] else ...[
             Builder(
               builder: (context) {
-                final quotaNotifier = ref.read(quotaProvider.notifier);
-                final remaining = quotaNotifier.getRemainingMonthly(subscription.tier);
+                final quotaState = ref.watch(quotaProvider);
+                final remaining = quotaState.getRemainingFreeQuota();
                 return Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
@@ -246,7 +242,7 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
             ],
           ),
           const SizedBox(height: 16),
-          ...SubscriptionFeatures.proFeatures.map(
+          ...SubscriptionFeatures.basicFeatures.map(
             (feature) => Padding(
               padding: const EdgeInsets.symmetric(vertical: 6),
               child: Row(
@@ -299,147 +295,6 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
     );
   }
 
-  /// 수동 패키지 선택 섹션
-  Widget _buildManualPackagesSection(SubscriptionState subscription) {
-    final offerings = subscription.offerings;
-    
-    if (offerings == null || offerings.current == null) {
-      return const SizedBox.shrink();
-    }
-
-    final packages = offerings.current!.availablePackages;
-    
-    if (packages.isEmpty) {
-      return const SizedBox.shrink();
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Padding(
-          padding: EdgeInsets.symmetric(vertical: 8),
-          child: Text(
-            '또는 플랜 선택',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-              color: Colors.grey,
-            ),
-          ),
-        ),
-        ...packages.map((package) => _buildPackageCard(package)),
-      ],
-    );
-  }
-
-  /// 개별 패키지 카드
-  Widget _buildPackageCard(Package package) {
-    final product = package.storeProduct;
-    final isLifetime = package.packageType == PackageType.lifetime;
-    final isYearly = package.packageType == PackageType.annual;
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: Theme.of(context).cardColor,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: isYearly
-              ? const Color(0xFF6366F1)
-              : Colors.grey.withValues(alpha: 0.3),
-          width: isYearly ? 2 : 1,
-        ),
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: () => _purchasePackage(package),
-          borderRadius: BorderRadius.circular(12),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              children: [
-                // 패키지 아이콘
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF6366F1).withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Icon(
-                    isLifetime
-                        ? Icons.all_inclusive
-                        : (isYearly ? Icons.calendar_today : Icons.event),
-                    color: const Color(0xFF6366F1),
-                  ),
-                ),
-                const SizedBox(width: 16),
-
-                // 패키지 정보
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Text(
-                            _getPackageTitle(package),
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          if (isYearly) ...[
-                            const SizedBox(width: 8),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 2,
-                              ),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF6366F1),
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: const Text(
-                                '인기',
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        _getPackageDescription(package),
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey[600],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-                // 가격
-                Text(
-                  product.priceString,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF6366F1),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
 
   /// Customer Center 버튼
   Widget _buildCustomerCenterButton() {

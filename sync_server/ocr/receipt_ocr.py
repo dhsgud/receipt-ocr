@@ -1,7 +1,6 @@
 """
-Receipt OCR Module - LightOnOCR Hybrid Pipeline
-Pipeline: Local LightOnOCR (Vision) -> Raw Text -> Gemini Flash (Structuring)
-Fallback: Gemini Vision (If Local fails) -> Local Fallback
+Receipt OCR Module - Gemini Vision API
+Gemini Flash를 사용한 영수증 이미지 분석 및 JSON 구조화
 """
 
 import io
@@ -12,50 +11,25 @@ import requests
 import random
 import time
 from typing import Optional, Any, Dict
-from typing import Optional, Any, Dict
 from PIL import Image, ImageFile
-
-try:
-    from openai import OpenAI
-except ImportError:
-    OpenAI = None
-
-try:
-    from anthropic import Anthropic
-except ImportError:
-    Anthropic = None
 
 
 # 손상된/불완전한 이미지 로드 허용
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
-# ============== 서버 설정 ==============
-# 라즈베리파이/PC에서 실행 중인 llama-server (LightOnOCR GGUF 로드됨)
-LOCAL_SERVERS = [
-    "http://localhost:408/v1/chat/completions",
-    "http://127.0.0.1:408/v1/chat/completions",
-    "http://183.96.3.137:408/v1/chat/completions",
-]
-
-# 환경변수 오버라이드
-VISION_SERVER_URL = os.environ.get("VISION_SERVER_URL", None)
-LOCAL_MODEL_NAME = "gpt-4-vision-preview" # llama.cpp 호환성용
-
-# Gemini 설정
+# ============== Gemini API 설정 ==============
 DEFAULT_GEMINI_MODEL = "gemini-2.0-flash"
 GEMINI_MODEL = os.environ.get("GEMINI_MODEL", DEFAULT_GEMINI_MODEL)
 GEMINI_API_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
 
 REQUEST_TIMEOUT = 300
-HEALTH_CHECK_TIMEOUT = 3
 
 
 class ReceiptOCR:
-    """LightOnOCR + Gemini 하이브리드 파이프라인"""
+    """Gemini Vision API 기반 영수증 OCR"""
     
-    def __init__(self, use_gpu: bool = False, lang: str = 'korean', server_url: str = None):
+    def __init__(self, use_gpu: bool = False, lang: str = 'korean', **kwargs):
         self.lang = lang
-        self.local_server_url = server_url or self._find_available_server()
         
         # Gemini 키 로드
         self.gemini_keys = []
@@ -63,29 +37,6 @@ class ReceiptOCR:
             self.gemini_keys.append(os.environ.get("GEMINI_API_KEY_1"))
         if os.environ.get("GEMINI_API_KEY_2"):
             self.gemini_keys.append(os.environ.get("GEMINI_API_KEY_2"))
-
-        # Other Clients (Initialized on demand)
-        self.openai_client = None
-        self.anthropic_client = None
-        self.xai_client = None
-
-
-    def _find_available_server(self) -> str:
-        """사용 가능한 로컬 서버 찾기"""
-        if VISION_SERVER_URL:
-            return VISION_SERVER_URL
-        
-        for url in LOCAL_SERVERS:
-            try:
-                health = url.replace("/v1/chat/completions", "/health")
-                requests.get(health, timeout=1)
-                print(f"[OCR] 로컬 서버 감지됨: {url}")
-                return url
-            except:
-                continue
-        
-        print("[OCR] 활성 로컬 서버 없음, 기본값 사용")
-        return LOCAL_SERVERS[-1]
 
     def _call_gemini_text(self, text: str) -> Optional[Dict[str, Any]]:
         """Gemini에게 텍스트 구조화 요청 (저비용)"""
@@ -102,15 +53,43 @@ class ReceiptOCR:
 
 ## 분석 규칙
 1. 상호명, 날짜(YYYY-MM-DD), 합계금액, 품목 리스트 추출
-2. 카테고리는 상호명과 품목을 보고 추론 (식비, 교통, 의료, 마트, 편의점, 카페, 기타 등)
+2. 카테고리는 상호명과 품목을 보고 아래 카테고리 중 하나로 정확히 매칭
 3. 숫자가 오인식된 경우(예: 'IO00' -> 1000) 문맥에 맞춰 교정
+4. is_income은 일반 영수증이면 false, 급여명세서/환급금 등이면 true
+
+## 지출 카테고리 (is_income: false)
+- 식비: 식당, 음식점, 레스토랑, 치킨, 피자, 분식, 카페, 베이커리, 편의점, 배달
+- 교통비: 주유소, 택시, 버스, 지하철, 기차, 항공, 렌터카, 주차장, 톨게이트
+- 주거비: 월세, 관리비, 전기/가스/수도, 인테리어, 부동산
+- 통신비: 휴대폰요금, 인터넷요금, 기기할부
+- 의류/미용: 옷가게, 신발, 화장품, 미용실, 네일, 세탁소
+- 생활용품: 마트, 다이소, 생필품, 가구, 가전, 문구
+- 건강/의료: 병원, 약국, 한의원, 치과, 피부과, 안과, 헬스장
+- 여가/문화: 영화관, 공연, 서점, 여행, 숙박, 놀이공원, 캠핑, 골프
+- 구독서비스: OTT, 음악스트리밍, 멤버십, 앱결제
+- 교육: 학원, 등록금, 강의, 교재, 자격증
+- 경조사/선물: 축의금, 조의금, 선물, 기부, 생일, 기념일
+- 금융: 대출상환, 수수료, 투자, 적금
+- 육아/자녀: 어린이집, 유아용품, 장난감, 소아과, 아이학원
+- 반려동물: 사료, 동물병원, 반려용품, 펫미용
+- 자동차: 정비, 세차, 타이어, 차량용품, 차량할부
+- 보험: 생명보험, 건강보험, 화재보험, 자동차보험
+- 세금/공과금: 소득세, 재산세, 국민연금, 건강보험료
+- 기타: 위 카테고리에 맞지 않는 경우
+
+## 수입 카테고리 (is_income: true)
+- 월급, 상여금, 수당, 야근수당, 프리랜서수입, 사업소득
+- 투자수익, 배당금, 이자수익, 임대소득, 부수입
+- 연금, 환급금, 용돈, 선물금/축의금, 장학금
+- 중고판매, 보험금수령, 퇴직금, 정부지원금, 아동수당
+- 암호화폐수익, 유튜브/SNS수익, 상속/증여, 기타수입
 
 ## JSON 포맷
 {{
     "store_name": "상호명",
     "date": "YYYY-MM-DD",
     "total_amount": 0,
-    "category": "카테고리",
+    "category": "카테고리명(위 목록에서 정확히 선택)",
     "is_income": false,
     "items": [
         {{"name": "품목명", "quantity": 1, "unit_price": 0, "total_price": 0}}
@@ -129,19 +108,34 @@ JSON만 응답하세요."""
 - store_name: 상호명
 - date: 날짜 (YYYY-MM-DD 형식)
 - total_amount: 합계 금액 (숫자만, 쉼표 없이)
-- category: 카테고리 (아래 규칙 참고)
+- category: 카테고리 (아래 목록에서 정확히 선택)
 - is_income: 수입 여부 (true/false, 일반 영수증은 false)
 - items: 품목 목록 [{name, quantity, unit_price, total_price}]
 
-## 카테고리 판단 규칙
-1. 카페/커피숍/스타벅스/공차/이디야/투썸 → "카페"
-2. 편의점/CU/GS25/세븐일레븐/미니스톱 → "편의점"
-3. 마트/이마트/홈플러스/롯데마트/하나로마트 → "마트"
-4. 약국/병원/의원/메디/클리닉 → "의료"
-5. 주유소/주유/택시/버스/지하철/교통카드 → "교통"
-6. 식당/음식점/레스토랑/치킨/피자/분식/포차/회/고기 → "식비"
-7. 의류/옷/신발/쇼핑몰/백화점 → "쇼핑"
-8. 그 외 → "기타"
+## 지출 카테고리 (is_income: false) - 반드시 아래 이름 중 하나 사용
+- 식비: 식당, 카페, 편의점, 베이커리, 배달, 마트 식품코너
+- 교통비: 주유소, 택시, 대중교통, 기차, 항공, 렌터카, 주차장
+- 주거비: 월세, 관리비, 전기/가스/수도 요금, 인테리어
+- 통신비: 휴대폰, 인터넷, 기기할부
+- 의류/미용: 옷, 신발, 화장품, 미용실, 네일, 세탁
+- 생활용품: 마트(비식품), 다이소, 가구, 가전, 문구
+- 건강/의료: 병원, 약국, 치과, 한의원, 피부과, 안과, 헬스장
+- 여가/문화: 영화, 공연, 서점, 여행, 숙박, 놀이공원, 캠핑, 골프
+- 구독서비스: 넷플릭스, 유튜브프리미엄, 멜론, 앱결제
+- 교육: 학원, 등록금, 강의, 교재
+- 경조사/선물: 축의금, 조의금, 선물, 기부
+- 금융: 대출상환, 수수료, 투자, 적금
+- 육아/자녀: 어린이집, 유아용품, 장난감, 소아과
+- 반려동물: 사료, 동물병원, 반려용품
+- 자동차: 정비, 세차, 타이어, 차량용품
+- 보험: 생명/건강/화재/자동차 보험
+- 세금/공과금: 소득세, 재산세, 국민연금, 건강보험료
+- 기타: 위에 해당하지 않는 경우
+
+## 수입 카테고리 (is_income: true)
+- 월급, 상여금, 수당, 프리랜서수입, 사업소득, 투자수익
+- 배당금, 이자수익, 임대소득, 부수입, 연금, 환급금
+- 장학금, 중고판매, 보험금수령, 퇴직금, 정부지원금, 기타수입
 
 ## JSON 형식
 {"store_name": "상호명", "date": "YYYY-MM-DD", "total_amount": 숫자, "category": "카테고리", "is_income": false, "items": [{"name": "품목", "quantity": 1, "unit_price": 0, "total_price": 0}]}
@@ -198,45 +192,7 @@ JSON만 응답하세요."""
                     break
         return None
 
-    def _call_lighton_ocr(self, image_base64: str) -> Optional[str]:
-        """로컬 LightOnOCR 호출 (Text Extraction)"""
-        if not self.local_server_url:
-            return None
-            
-        print(f"[OCR] Local LightOnOCR processing... ({self.local_server_url})")
-        
-        # LightOnOCR 프롬프트: 텍스트 추출에 집중
-        # 모델마다 최적 프롬프트가 다를 수 있음. 일반적인 OCR 요청 사용.
-        prompt = "Convert this receipt image to text. Transcribe all visible text line by line."
-        
-        payload = {
-            "model": LOCAL_MODEL_NAME,
-            "messages": [
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": prompt},
-                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_base64}"}}
-                    ]
-                }
-            ],
-            "temperature": 0.1,
-            "max_tokens": 2048,
-        }
-        
-        try:
-            # 로컬 Inference는 느릴 수 있음 (300s -> 600s)
-            res = requests.post(self.local_server_url, json=payload, timeout=600) 
-            if res.status_code == 200:
-                content = res.json()['choices'][0]['message']['content']
-                print(f"[OCR] Local extracted {len(content)} chars")
-                return content
-            else:
-                print(f"[OCR] Local Server Error: {res.status_code}")
-        except Exception as e:
-            print(f"[OCR] Local Server Connect Error: {e}")
-            
-        return None
+
 
     def _normalize_response(self, result: Dict[str, Any]) -> Dict[str, Any]:
         """OCR 결과 정규화: 문자열 금액을 숫자로 변환, 한글 키를 영문으로 변환"""
@@ -323,212 +279,83 @@ JSON만 응답하세요."""
         return result
     
     def _infer_category(self, store_name: str) -> str:
-        """상호명으로 카테고리 추론"""
+        """상호명으로 카테고리 추론 (확장된 카테고리 지원)"""
         store_lower = store_name.lower()
         
-        # 카페
-        if any(k in store_lower for k in ['카페', '커피', '스타벅스', '공차', '이디야', '투썸', '빽다방', '메가커피', 'cafe', 'coffee']):
-            return '카페'
-        # 편의점
-        if any(k in store_lower for k in ['편의점', 'cu', 'gs25', 'gs 25', '세븐일레븐', '7-eleven', '미니스톱', 'ministop', '이마트24']):
-            return '편의점'
-        # 마트
-        if any(k in store_lower for k in ['마트', '이마트', '홈플러스', '롯데마트', '하나로', '코스트코', 'costco', '트레이더스']):
-            return '마트'
-        # 의료
-        if any(k in store_lower for k in ['약국', '병원', '의원', '메디', '클리닉', '치과', '안과', '내과', '외과', '피부과', '정형외과']):
-            return '의료'
-        # 교통
-        if any(k in store_lower for k in ['주유', '주유소', '택시', '버스', '지하철', '교통', 'sk에너지', 'gs칼텍스', '현대오일']):
-            return '교통'
-        # 식비
-        if any(k in store_lower for k in ['식당', '음식점', '레스토랑', '치킨', '피자', '분식', '포차', '회', '고기', '곱창', '삼겹', '족발', '보쌈', '국밥', '찌개', '탕', '면', '밥', 'bbq', 'bhc', '교촌', '굽네']):
+        # 건강/의료
+        if any(k in store_lower for k in ['약국', '병원', '의원', '메디', '클리닉', '치과', '안과', '내과', '외과', '피부과', '정형외과', '한의원', '한방', '소아과', '이비인후과', '산부인과', '비뇨기과', '정신과', '상담센터']):
+            return '건강/의료'
+        # 교통비
+        if any(k in store_lower for k in ['주유', '주유소', '택시', '버스', '지하철', '교통', 'sk에너지', 'gs칼텍스', '현대오일', 's-oil', '고속도로', '톨게이트', '공항', '항공', '렌터카', '쏘카', '타다', '킥보드']):
+            return '교통비'
+        # 자동차
+        if any(k in store_lower for k in ['정비', '카센터', '오토', '타이어', '세차', '자동차', '카워시']):
+            return '자동차'
+        # 식비 (카페 포함)
+        if any(k in store_lower for k in ['카페', '커피', '스타벅스', '공차', '이디야', '투썸', '빽다방', '메가커피', 'cafe', 'coffee', '편의점', 'cu', 'gs25', 'gs 25', '세븐일레븐', '7-eleven', '미니스톱', 'ministop', '이마트24', '식당', '음식점', '레스토랑', '치킨', '피자', '분식', '포차', '회', '고기', '곱창', '삼겹', '족발', '보쌈', '국밥', '찌개', '탕', '면', '밥', 'bbq', 'bhc', '교촌', '굽네', '맘스터치', '롯데리아', '맥도날드', '버거킹', '서브웨이', '도미노', '한솥', '죠스떡볶이', '베이커리', '빵', '파리바게뜨', '뚜레쥬르', '던킨']):
             return '식비'
-        # 쇼핑
-        if any(k in store_lower for k in ['백화점', '쇼핑몰', '의류', '옷', '신발', '아울렛', '유니클로', '자라', 'zara', 'h&m']):
-            return '쇼핑'
+        # 생활용품 (마트)
+        if any(k in store_lower for k in ['마트', '이마트', '홈플러스', '롯데마트', '하나로', '코스트코', 'costco', '트레이더스', '다이소', '아성다이소', '오늘의집']):
+            return '생활용품'
+        # 의류/미용
+        if any(k in store_lower for k in ['백화점', '쇼핑몰', '의류', '옷', '신발', '아울렛', '유니클로', '자라', 'zara', 'h&m', '미용실', '헤어', '네일', '뷰티', '올리브영', '화장품', '세탁', '클리닝']):
+            return '의류/미용'
+        # 여가/문화
+        if any(k in store_lower for k in ['영화', 'cgv', '메가박스', '롯데시네마', '공연', '전시', '뮤지컬', '서점', '교보문고', '예스24', '알라딘', '노래방', '볼링', '당구', '피씨방', 'pc방', '놀이공원', '에버랜드', '롯데월드', '워터파크', '캠핑', '골프', '스키', '리조트']):
+            return '여가/문화'
+        # 교육
+        if any(k in store_lower for k in ['학원', '학교', '대학교', '교육', '강의', '어학원', '영어', '수학', '과외']):
+            return '교육'
+        # 반려동물
+        if any(k in store_lower for k in ['동물병원', '펫', '반려', '강아지', '고양이', '사료', '펫샵', '동물']):
+            return '반려동물'
+        # 육아/자녀
+        if any(k in store_lower for k in ['어린이집', '유치원', '키즈', '아이', '유아', '장난감', '토이저러스', '레고']):
+            return '육아/자녀'
+        # 구독서비스
+        if any(k in store_lower for k in ['넷플릭스', 'netflix', '유튜브', 'youtube', '멜론', 'melon', '스포티파이', '애플뮤직', '디즈니+', '쿠팡플레이', '왓챠', '구독']):
+            return '구독서비스'
+        # 보험
+        if any(k in store_lower for k in ['보험', '삼성생명', '한화생명', '교보생명', '메리츠', 'db손해보험', '현대해상']):
+            return '보험'
+        # 세금/공과금
+        if any(k in store_lower for k in ['세금', '국세', '지방세', '국민연금', '건강보험', '공과금']):
+            return '세금/공과금'
+        # 경조사/선물
+        if any(k in store_lower for k in ['축의금', '조의금', '화환', '꽃배달', '선물', '기프트']):
+            return '경조사/선물'
+        # 통신비
+        if any(k in store_lower for k in ['skt', 'kt', 'lg유플러스', 'lgu+', '알뜰폰', '통신']):
+            return '통신비'
         
         return '기타'
 
     def process_image(self, image_data: bytes) -> Dict[str, Any]:
         """
-        [New Pipeline]
-        1. Local LightOnOCR (Vision) -> Raw Text
-        2. Gemini Flash (Text) -> JSON Structuring
-        3. Fallback: Gemini Vision (Image) -> JSON
+        Gemini Vision API로 영수증 이미지 분석
         """
         start_time = time.time()
         image_base64 = base64.b64encode(image_data).decode('utf-8')
         
-        # 1. Local LightOnOCR (Text Extraction)
-        try:
-            raw_text = self._call_lighton_ocr(image_base64)
-            if raw_text:
-                # 2. Gemini Text Structuring
-                json_result = self._call_gemini_text(raw_text)
-                if json_result:
-                    print(f"[OCR] Pipeline Success (Local+Gemini) - {time.time()-start_time:.2f}s")
-                    return self._normalize_response(json_result)
-                else:
-                    # Gemini Structuring Failed, but we have text. Return partial result.
-                    print("[OCR] Warning: Gemini structuring failed (Rate Limit?), returning raw text result")
-                    return {
-                        "store_name": "OCR Text Only", # Special flag for UI
-                        "date": None,
-                        "total_amount": 0,
-                        "items": [],
-                        "category": None,
-                        "raw_text": raw_text
-                    }
-        except Exception as e:
-            print(f"[OCR] Pipeline 1 Failed: {e}")
-
-        # 3. Fallback: Gemini Vision
-        print("[OCR] Fallback to Gemini Vision API...")
+        print("[OCR] Gemini Vision processing...")
         vision_result = self._call_gemini_vision(image_base64)
         if vision_result:
+            print(f"[OCR] Gemini Vision Success - {time.time()-start_time:.2f}s")
             return self._normalize_response(vision_result)
             
-        raise RuntimeError("All OCR pipelines failed")
+        raise RuntimeError("Gemini Vision OCR failed")
 
-    def process_image_v2(self, image_data: bytes, provider: str = 'auto') -> Dict[str, Any]:
+    def process_image_v2(self, image_data: bytes, provider: str = 'gemini') -> Dict[str, Any]:
         """
         Provider-aware OCR processing.
-        Providers: 'auto' (Hybrid), 'gemini', 'gpt', 'claude', 'grok'
+        Default: 'gemini'
         """
-        image_base64 = base64.b64encode(image_data).decode('utf-8')
-        
         print(f"[OCR] Processing with provider: {provider}")
-
-        # 1. Direct Cloud Providers
-        if provider == 'gpt':
-            return self._normalize_response(self._call_gpt_vision(image_base64))
-        elif provider == 'claude':
-            return self._normalize_response(self._call_claude_vision(image_base64))
-        elif provider == 'grok':
-            return self._normalize_response(self._call_grok_vision(image_base64))
-        elif provider == 'gemini':
-            # Direct Gemini Vision (Bypass Local)
-            res = self._call_gemini_vision(image_base64)
-            if not res:
-                raise RuntimeError("Gemini Vision failed")
-            return self._normalize_response(res)
-            
-        # 2. Auto / Hybrid Mode (Default)
+        
+        # Gemini (default)
         return self.process_image(image_data)
 
-    def _call_gpt_vision(self, image_base64: str) -> Dict[str, Any]:
-        """OpenAI GPT-4o Vision"""
-        if OpenAI is None:
-            raise ImportError("openai package not installed. Run 'pip install openai'")
-            
-        api_key = os.environ.get("OPENAI_API_KEY")
-        if not api_key:
-            raise ValueError("OPENAI_API_KEY not found")
-            
-        if not self.openai_client:
-            self.openai_client = OpenAI(api_key=api_key)
-            
-        response = self.openai_client.chat.completions.create(
-            model="gpt-4o",
-            messages=[
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": "Extract receipt info as JSON: {store_name, date, total_amount, items[{name, quantity, unit_price, total_price}], category, is_income}. Return ONLY JSON."},
-                        {
-                            "type": "image_url",
-                            "image_url": {
-                                "url": f"data:image/jpeg;base64,{image_base64}"
-                            }
-                        }
-                    ]
-                }
-            ],
-            response_format={"type": "json_object"},
-            max_tokens=1000,
-        )
-        return json.loads(response.choices[0].message.content)
 
-    def _call_claude_vision(self, image_base64: str) -> Dict[str, Any]:
-        """Anthropic Claude 3.5 Sonnet"""
-        if Anthropic is None:
-            raise ImportError("anthropic package not installed. Run 'pip install anthropic'")
-
-        api_key = os.environ.get("ANTHROPIC_API_KEY")
-        if not api_key:
-            raise ValueError("ANTHROPIC_API_KEY not found")
-            
-        if not self.anthropic_client:
-            self.anthropic_client = Anthropic(api_key=api_key)
-            
-        message = self.anthropic_client.messages.create(
-            model="claude-3-5-sonnet-20240620",
-            max_tokens=1024,
-            messages=[
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "image",
-                            "source": {
-                                "type": "base64",
-                                "media_type": "image/jpeg",
-                                "data": image_base64,
-                            },
-                        },
-                        {
-                            "type": "text",
-                            "text": "Extract receipt data into JSON format: {store_name, date(YYYY-MM-DD), total_amount(int), items[{name, quantity, unit_price, total_price}], category, is_income(bool)}. Return only JSON."
-                        }
-                    ],
-                }
-            ]
-        )
-        # Claude doesn't enforce JSON mode strictly, manual cleanup might be needed
-        # but 3.5 Sonnet is usually good.
-        text = message.content[0].text
-        start = text.find('{')
-        end = text.rfind('}') + 1
-        return json.loads(text[start:end])
-
-    def _call_grok_vision(self, image_base64: str) -> Dict[str, Any]:
-        """xAI Grok Vision (OpenAI Compatible)"""
-        if OpenAI is None:
-            raise ImportError("openai package not installed. Run 'pip install openai'")
-
-        api_key = os.environ.get("XAI_API_KEY")
-        if not api_key:
-            raise ValueError("XAI_API_KEY not found")
-            
-        if not self.xai_client:
-            self.xai_client = OpenAI(
-                api_key=api_key,
-                base_url="https://api.x.ai/v1",
-            )
-            
-        response = self.xai_client.chat.completions.create(
-            model="grok-vision-beta",
-            messages=[
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": "Extract receipt info as JSON: {store_name, date, total_amount, items, category}. JSON only."},
-                        {
-                            "type": "image_url",
-                            "image_url": {
-                                "url": f"data:image/jpeg;base64,{image_base64}"
-                            }
-                        }
-                    ]
-                }
-            ],
-            stream=False,
-        )
-        text = response.choices[0].message.content
-        start = text.find('{')
-        end = text.rfind('}') + 1
-        return json.loads(text[start:end])
 
 
     def process_base64(self, base64_image: str) -> Dict[str, Any]:

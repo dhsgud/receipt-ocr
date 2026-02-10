@@ -4,13 +4,16 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import '../../core/theme/app_theme.dart';
-import '../../core/app_config.dart';
 import '../../shared/providers/app_providers.dart';
 import '../../shared/widgets/common_widgets.dart';
 import '../../data/services/notification_monitor_service.dart';
 import 'calendar_settings_screen.dart';
 import 'subscription_screen.dart';
-import 'admin_screen.dart';
+
+import 'category_management_screen.dart';
+import '../budget/budget_management_screen.dart';
+import 'fixed_expense_screen.dart';
+import '../statistics/spending_analysis_screen.dart';
 import '../../data/services/purchase_service.dart';
 import '../../data/services/quota_service.dart';
 import '../../core/entitlements.dart';
@@ -232,17 +235,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                     final tier = subscription.tier;
                                     if (tier != SubscriptionTier.free) {
                                       return Text(
-                                        tier == SubscriptionTier.pro ? 'Pro: 무제한 OCR' : 'Basic: 월 300회',
+                                        tier == SubscriptionTier.pro ? 'Pro: 무제한 OCR' : 'Basic: 무제한 OCR',
                                         style: const TextStyle(
                                           fontSize: 12,
                                           color: Color(0xFF6366F1),
                                         ),
                                       );
                                     }
-                                    final quotaNotifier = ref.read(quotaProvider.notifier);
-                                    final remaining = quotaNotifier.getRemainingMonthly(tier);
+                                    final quotaState = ref.watch(quotaProvider);
+                                    final remaining = quotaState.getRemainingFreeQuota();
                                     return Text(
-                                      '무료 OCR $remaining/10회 남음',
+                                      '무료 OCR $remaining/${QuotaConfig.freeTotalLimit}회 남음',
                                       style: const TextStyle(
                                         fontSize: 12,
                                         color: Colors.grey,
@@ -289,6 +292,224 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         },
                         activeTrackColor: AppColors.primary,
                       ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 32),
+
+                // Category Management Section
+                const Text(
+                  '카테고리 관리',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.grey,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                StyledCard(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const CategoryManagementScreen(),
+                      ),
+                    );
+                  },
+                  child: const Row(
+                    children: [
+                      Icon(Icons.category, color: AppColors.primary),
+                      SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '카테고리 설정',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            SizedBox(height: 2),
+                            Text(
+                              '지출/수입 카테고리 관리',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Icon(Icons.chevron_right, color: Colors.grey),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                StyledCard(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const BudgetManagementScreen(),
+                      ),
+                    );
+                  },
+                  child: const Row(
+                    children: [
+                      Icon(Icons.account_balance_wallet, color: AppColors.income),
+                      SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '예산 설정',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            SizedBox(height: 2),
+                            Text(
+                              '월별 예산 및 카테고리별 예산 관리',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Icon(Icons.chevron_right, color: Colors.grey),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                // 예산 초과 알림 토글
+                Consumer(
+                  builder: (context, ref, _) {
+                    final isEnabled = ref.watch(budgetAlertEnabledProvider);
+                    return StyledCard(
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.notifications_active,
+                            color: isEnabled ? Colors.orange : Colors.grey,
+                          ),
+                          const SizedBox(width: 12),
+                          const Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  '예산 초과 알림',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                SizedBox(height: 2),
+                                Text(
+                                  '80% 경고, 100% 초과 시 알림',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.grey,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Switch.adaptive(
+                            value: isEnabled,
+                            onChanged: (value) {
+                              ref.read(budgetAlertEnabledProvider.notifier).state = value;
+                            },
+                            activeTrackColor: Colors.orange,
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(height: 12),
+                StyledCard(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const FixedExpenseScreen(),
+                      ),
+                    );
+                  },
+                  child: const Row(
+                    children: [
+                      Icon(Icons.repeat, color: Colors.orange),
+                      SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '고정비 관리',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            SizedBox(height: 2),
+                            Text(
+                              '정기 결제 항목 관리',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Icon(Icons.chevron_right, color: Colors.grey),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                StyledCard(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const SpendingAnalysisScreen(),
+                      ),
+                    );
+                  },
+                  child: const Row(
+                    children: [
+                      Icon(Icons.analytics, color: Colors.purple),
+                      SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '고급 분석',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            SizedBox(height: 2),
+                            Text(
+                              '월별 트렌드, 전월 비교, 카테고리 분석',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Icon(Icons.chevron_right, color: Colors.grey),
                     ],
                   ),
                 ),
@@ -638,6 +859,51 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 
                 const SizedBox(height: 32),
 
+                // Data Management
+                const Text(
+                  '데이터 관리',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.grey,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                StyledCard(
+                  onTap: () => _showResetDataDialog(),
+                  child: const Row(
+                    children: [
+                      Icon(Icons.delete_forever, color: Colors.red),
+                      SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '거래 데이터 초기화',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            SizedBox(height: 2),
+                            Text(
+                              '모든 거래 내역을 삭제합니다',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Icon(Icons.chevron_right, color: Colors.grey),
+                    ],
+                  ),
+                ),
+                
+                const SizedBox(height: 32),
+
                 // App Info
                 const Text(
                   '앱 정보',
@@ -660,58 +926,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   ),
                 ),
                 
-                // Admin Settings (only visible in admin mode)
-                if (kAdminMode) ...[
-                  const SizedBox(height: 32),
-                  const Text(
-                    '개발자',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.grey,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  StyledCard(
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const AdminScreen(),
-                        ),
-                      );
-                    },
-                    child: Row(
-                      children: [
-                        const Icon(Icons.developer_mode, color: Colors.deepPurple),
-                        const SizedBox(width: 12),
-                        const Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                '개발자 설정',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                              SizedBox(height: 2),
-                              Text(
-                                'OCR 모드, 서버 URL 등',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.grey,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const Icon(Icons.chevron_right, color: Colors.grey),
-                      ],
-                    ),
-                  ),
-                ],
+
               ],
             ),
     );
@@ -1001,6 +1216,58 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('알림 모니터링이 비활성화되었습니다')),
       );
+    }
+  }
+
+  Future<void> _showResetDataDialog() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: Colors.red),
+            SizedBox(width: 8),
+            Text('데이터 초기화'),
+          ],
+        ),
+        content: const Text(
+          '모든 거래 내역이 영구적으로 삭제됩니다.\n\n이 작업은 되돌릴 수 없습니다.\n정말 삭제하시겠습니까?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('취소'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('삭제'),
+          ),
+        ],
+      ),
+    );
+    
+    if (confirmed == true) {
+      final repository = ref.read(transactionRepositoryProvider);
+      await repository.clearAllTransactions();
+      
+      // Refresh all data providers
+      ref.invalidate(transactionsProvider);
+      ref.invalidate(selectedDateTransactionsProvider);
+      ref.invalidate(monthlyTransactionsProvider);
+      ref.invalidate(monthlyStatsProvider);
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('모든 거래 내역이 삭제되었습니다'),
+            backgroundColor: AppColors.income,
+          ),
+        );
+      }
     }
   }
 }

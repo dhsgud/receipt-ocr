@@ -50,8 +50,8 @@ dependencies:
   # In-App Purchase (RevenueCat)
   purchases_flutter: ^8.0.0
   purchases_ui_flutter: ^8.11.0
-  # Google AdMob (iOS/Android 설정 후 활성화)
-  # google_mobile_ads: ^7.0.0
+  # Google AdMob
+  google_mobile_ads: ^5.3.0
 
 dev_dependencies:
   flutter_test:

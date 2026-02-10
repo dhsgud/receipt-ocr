@@ -37,8 +37,8 @@ class ReceiptData {
     return null;
   }
 
-  factory ReceiptData.fromSllmResponse(Map<String, dynamic> json) {
-    // Parse SLLM response - adjust based on actual SLLM API format
+  factory ReceiptData.fromOcrResponse(Map<String, dynamic> json) {
+    // Parse OCR server response (Gemini Vision API)
     final items = (json['items'] as List<dynamic>?)
         ?.map((item) => ReceiptItem.fromMap(item as Map<String, dynamic>))
         .toList() ?? [];

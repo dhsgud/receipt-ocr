@@ -66,6 +66,13 @@ class TransactionRepository {
     await _saveTransactions(transactions);
   }
 
+  /// Clear all transactions (for data reset)
+  Future<void> clearAllTransactions() async {
+    await _ensureInitialized();
+    await _prefs!.remove(_storageKey);
+    debugPrint('All transactions cleared');
+  }
+
   /// Get all transactions
   Future<List<TransactionModel>> getAllTransactions() async {
     final transactions = await _loadTransactions();

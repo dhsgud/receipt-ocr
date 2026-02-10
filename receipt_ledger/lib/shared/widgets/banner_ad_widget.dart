@@ -1,24 +1,87 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_mobile_ads/google_mobile_ads.dart';
 import '../../data/services/ad_service.dart';
 import '../../data/services/purchase_service.dart';
 import '../../core/entitlements.dart';
 
-/// 배너 광고 위젯 (Stub)
-/// 
-/// 실제 AdMob을 활성화하려면:
-/// 1. pubspec.yaml에서 google_mobile_ads 주석 해제
-/// 2. iOS Info.plist에 GADApplicationIdentifier 추가
-/// 3. Android AndroidManifest.xml에 AdMob App ID 추가
-/// 4. 이 파일을 원래 버전으로 복원
-class BannerAdWidget extends ConsumerWidget {
+/// 배너 광고 위젯 (Free 등급만 표시)
+class BannerAdWidget extends ConsumerStatefulWidget {
   const BannerAdWidget({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    // AdMob 비활성화 - 빈 위젯 반환
-    return const SizedBox.shrink();
+  ConsumerState<BannerAdWidget> createState() => _BannerAdWidgetState();
+}
+
+class _BannerAdWidgetState extends ConsumerState<BannerAdWidget> {
+  BannerAd? _bannerAd;
+  bool _isLoaded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAd();
+  }
+
+  void _loadAd() {
+    // 웹에서는 광고 표시 안 함
+    if (kIsWeb) return;
+
+    _bannerAd = BannerAd(
+      adUnitId: AdIds.bannerAdUnitId,
+      size: AdSize.banner,
+      request: const AdRequest(),
+      listener: BannerAdListener(
+        onAdLoaded: (ad) {
+          debugPrint('[BannerAdWidget] ✅ Ad loaded successfully');
+          if (mounted) {
+            setState(() {
+              _isLoaded = true;
+            });
+          }
+        },
+        onAdFailedToLoad: (ad, error) {
+          debugPrint('[BannerAdWidget] ❌ Ad failed to load: $error');
+          ad.dispose();
+        },
+      ),
+    );
+
+    _bannerAd!.load();
+  }
+
+  @override
+  void dispose() {
+    _bannerAd?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // 웹에서는 빈 위젯
+    if (kIsWeb) {
+      return const SizedBox.shrink();
+    }
+
+    // 프리미엄 사용자는 광고 비표시
+    final subscription = ref.watch(subscriptionProvider);
+    if (subscription.isPremium) {
+      return const SizedBox.shrink();
+    }
+
+    // 광고가 로드되지 않은 경우 — 공간만 확보
+    if (!_isLoaded || _bannerAd == null) {
+      return const SizedBox(height: 50);
+    }
+
+    // 배너 광고 표시
+    return Container(
+      width: _bannerAd!.size.width.toDouble(),
+      height: _bannerAd!.size.height.toDouble(),
+      alignment: Alignment.center,
+      child: AdWidget(ad: _bannerAd!),
+    );
   }
 }
 
@@ -39,7 +102,7 @@ class AdContainer extends StatelessWidget {
       decoration: BoxDecoration(
         color: Theme.of(context).scaffoldBackgroundColor,
         border: Border(
-          top: BorderSide(
+          bottom: BorderSide(
             color: Theme.of(context).dividerColor,
             width: 0.5,
           ),
@@ -50,13 +113,36 @@ class AdContainer extends StatelessWidget {
   }
 }
 
-/// Safe Area와 함께 사용하는 하단 배너 광고 (Stub)
+/// Safe Area와 함께 사용하는 상단 배너 광고
+class TopBannerAd extends StatelessWidget {
+  const TopBannerAd({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    if (kIsWeb) {
+      return const SizedBox.shrink();
+    }
+    
+    return const AdContainer(
+      child: BannerAdWidget(),
+    );
+  }
+}
+
+/// 하단 배너 광고
 class BottomBannerAd extends StatelessWidget {
   const BottomBannerAd({super.key});
 
   @override
   Widget build(BuildContext context) {
-    // AdMob 비활성화 - 빈 위젯 반환
-    return const SizedBox.shrink();
+    if (kIsWeb) {
+      return const SizedBox.shrink();
+    }
+    
+    return SafeArea(
+      child: AdContainer(
+        child: const BannerAdWidget(),
+      ),
+    );
   }
 }

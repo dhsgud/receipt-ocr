@@ -9,7 +9,7 @@ final transactionRepositoryProvider = Provider<TransactionRepository>((ref) {
   return TransactionRepository();
 });
 
-/// SLLM service provider
+/// Gemini OCR service provider
 final sllmServiceProvider = Provider<SllmService>((ref) {
   return SllmService();
 });
@@ -111,33 +111,14 @@ enum SyncStatus {
   error,
 }
 
-/// OCR 모드 설정
-enum OcrMode {
-  externalLlama,  // 외부 llama.cpp 서버 (라즈베리파이 등)
-  server,         // 내부 OCR 서버 (Python FastAPI)
-  local,          // 로컬 디바이스 (on-device, 모델 로드 필요)
-  auto,           // 자동 선택 (로컬 > 외부 > 서버 순)
-}
-
-/// OCR 모드 provider (기본값: auto)
-final ocrModeProvider = StateProvider<OcrMode>((ref) {
-  return OcrMode.server; // Default to our Python Hybrid Server
-});
-
-/// 외부 llama.cpp 서버 URL (설정에서 변경 가능)
-final externalLlamaUrlProvider = StateProvider<String>((ref) {
-  return 'http://183.96.3.137:408';
-});
-
-/// 내부 OCR 서버 URL
+/// OCR 서버 URL (Gemini 전용)
 final ocrServerUrlProvider = StateProvider<String>((ref) {
   return 'http://183.96.3.137:9999';
 });
 
-/// OCR 제공자 (Server Mode일 때 사용)
-/// 'auto' (Hybrid), 'gemini', 'gpt', 'claude', 'grok'
+/// OCR 제공자 (Gemini 전용)
 final ocrProviderProvider = StateProvider<String>((ref) {
-  return 'gemini';  // 프로덕션: Gemini 전용
+  return 'gemini';
 });
 
 // ============================================================================
@@ -156,4 +137,11 @@ final selectedCalendarIdProvider = StateProvider<String?>((ref) => null);
 
 /// 알림 모니터링 활성화 여부 (StateProvider로 UI 상태 관리)
 final notificationMonitorEnabledProvider = StateProvider<bool>((ref) => false);
+
+// ============================================================================
+// 예산 알림 관련 Providers
+// ============================================================================
+
+/// 예산 초과 알림 활성화 여부
+final budgetAlertEnabledProvider = StateProvider<bool>((ref) => true);
 

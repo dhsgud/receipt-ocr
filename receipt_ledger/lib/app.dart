@@ -23,7 +23,7 @@ class ReceiptLedgerApp extends ConsumerWidget {
     final isDarkMode = ref.watch(themeModeProvider);
 
     return MaterialApp(
-      title: 'Receipt Ledger',
+      title: '김동한 가계부',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
@@ -68,8 +68,8 @@ class _MainNavigationScreenState extends ConsumerState<MainNavigationScreen> {
   Future<void> _initSubscription() async {
     await ref.read(subscriptionProvider.notifier).init();
     await ref.read(quotaProvider.notifier).init();
-    // AdMob 초기화 - iOS/Android 설정 후 활성화
-    // await ref.read(adProvider.notifier).init();
+    // AdMob 초기화
+    await ref.read(adProvider.notifier).init();
   }
   
   @override
@@ -118,6 +118,14 @@ class _MainNavigationScreenState extends ConsumerState<MainNavigationScreen> {
 
   Future<void> _performAutoSync() async {
     if (_isSyncing) return;
+    
+    // 구독자만 동기화 가능
+    final subscription = ref.read(subscriptionProvider);
+    if (!subscription.canSync) {
+      debugPrint('[App] Sync disabled for free users');
+      ref.read(syncStatusProvider.notifier).state = SyncStatus.disconnected;
+      return;
+    }
 
     setState(() {
       _isSyncing = true;

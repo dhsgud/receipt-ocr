@@ -1,6 +1,6 @@
 """
-Receipt OCR Server with Llama.cpp
-기존 sync_server와 통합된 OCR 서버 (Llama.cpp Backend)
+Receipt OCR Server - Gemini Vision API
+기존 sync_server와 통합된 OCR 서버 (Gemini API Backend)
 """
 
 import io
@@ -34,7 +34,7 @@ IMAGES_PATH.mkdir(exist_ok=True)
 
 app = FastAPI(
     title="Receipt Ledger OCR Server",
-    description="Llama.cpp 기반 영수증 OCR 서버",
+    description="Gemini Vision API 기반 영수증 OCR 서버",
     version="2.2.0"
 )
 
@@ -63,7 +63,7 @@ class OCRRequest(BaseModel):
     """Base64 이미지 OCR 요청"""
     image: str  # Base64 encoded image
     preprocess: bool = True  # 이미지 전처리 여부
-    provider: str = 'auto'  # 'auto', 'gemini', 'gpt', 'claude', 'grok'
+    provider: str = 'gemini'  # 'gemini' (default)
 
 
 class ReceiptItem(BaseModel):
@@ -165,7 +165,7 @@ def row_to_transaction(row: sqlite3.Row) -> dict:
 @app.post("/api/ocr", response_model=OCRResponse)
 async def process_receipt_ocr(request: OCRRequest):
     """
-    Base64 인코딩된 이미지에서 영수증 정보 추출 (Llama.cpp)
+    Base64 인코딩된 이미지에서 영수증 정보 추출 (Gemini Vision)
     """
     import time
     start_time = time.time()
@@ -184,7 +184,7 @@ async def process_receipt_ocr(request: OCRRequest):
             image_bytes = preprocess_receipt_image(image_bytes)
             print(f"[OCR] Preprocessed: {len(image_bytes)} bytes")
         
-        # OCR 실행 (Llama.cpp / Providers)
+        # OCR 실행 (Gemini Vision API)
         ocr = get_ocr_engine()
         result = ocr.process_image_v2(image_bytes, provider=request.provider)
         print(f"[OCR] Result: {result}")
@@ -258,11 +258,9 @@ async def process_receipt_upload(
 async def ocr_status():
     """OCR 엔진 상태 확인"""
     try:
-        # Llama.cpp 서버 상태 체크 로직 필요 (이 예제에서는 단순 리턴)
         return {
             "status": "ready",
-            "engine": "Llama.cpp (Nanonets-OCR2-3B)",
-            "gpu": False,
+            "engine": "Gemini Vision API (gemini-2.0-flash)",
         }
     except Exception as e:
         return {
@@ -533,7 +531,7 @@ async def sync_transactions(
 @app.on_event("startup")
 async def startup_event():
     init_db()
-    print("Server started with OCR support (Llama.cpp)")
+    print("Server started with Gemini Vision OCR support")
 
 
 if __name__ == "__main__":

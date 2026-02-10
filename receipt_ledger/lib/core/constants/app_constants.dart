@@ -1,15 +1,9 @@
-/// SLLM Server Configuration and App Constants
+/// App Constants
 class AppConstants {
-  // SLLM OCR Server (Legacy - VL model)
-  // 포트 번호: 0408 -> 408 (앞의 0 제거)
-  static const String sllmBaseUrl = 'http://183.96.3.137:408';
-  static const String sllmOcrEndpoint = '/v1/chat/completions';
-  
-  // OCR Server (PaddleOCR on Raspberry Pi)
-  // sync_server와 같은 URL 사용
+  // OCR Server (Gemini Vision API)
   static const String ocrEndpoint = '/api/ocr';
   
-  // Sync Server (same machine as SLLM server)
+  // Sync Server
   static const String syncServerUrl = 'http://183.96.3.137:9999';
 
   

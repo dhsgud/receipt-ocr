@@ -580,6 +580,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       body: SafeArea(
         child: CustomScrollView(
           slivers: [
+            // 상단 배너 광고
+            const SliverToBoxAdapter(
+              child: TopBannerAd(),
+            ),
+            
             // App Header
             SliverToBoxAdapter(
               child: Padding(
