@@ -89,7 +89,7 @@
 
 개인정보 관련 문의사항이 있으시면 아래로 연락해 주세요:
 
-- **이메일**: dhsgud0112@gmail.com
+- **이메일**: fastfeelfreeai@gmail.com
 - **개발자**: 김동한
 
 ---
