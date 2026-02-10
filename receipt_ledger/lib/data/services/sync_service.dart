@@ -6,7 +6,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 import '../../core/constants/app_constants.dart';
 import '../models/transaction.dart';
+import '../models/budget.dart';
+import '../models/fixed_expense.dart';
 import '../repositories/transaction_repository.dart';
+import '../repositories/budget_repository.dart';
+import '../repositories/fixed_expense_repository.dart';
 import 'image_cache_service.dart';
 
 /// Sync service for sharing data between partners via desktop server
@@ -16,6 +20,8 @@ class SyncService {
   static const String _lastSyncTimeField = 'last_sync_time';
 
   final TransactionRepository _repository;
+  final BudgetRepository _budgetRepository;
+  final FixedExpenseRepository _fixedExpenseRepository;
   final Dio _dio;
   final ImageCacheService _imageCacheService;
   SharedPreferences? _prefs;
@@ -25,7 +31,7 @@ class SyncService {
   String? _lastSyncTime;
   bool _isSyncing = false;
 
-  SyncService(this._repository) : 
+  SyncService(this._repository, this._budgetRepository, this._fixedExpenseRepository) : 
     _dio = Dio(BaseOptions(
       baseUrl: AppConstants.syncServerUrl,
       connectTimeout: const Duration(seconds: 10),
@@ -114,14 +120,20 @@ class SyncService {
     try {
       // Get unsynced local transactions
       final unsyncedTransactions = await _repository.getUnsyncedTransactions();
+      final unsyncedBudgets = await _budgetRepository.getUnsyncedBudgets();
+      final unsyncedFixedExpenses = await _fixedExpenseRepository.getUnsyncedFixedExpenses();
       
       // Prepare sync request
       final requestData = {
         'transactions': unsyncedTransactions.map((t) => t.toMap()).toList(),
+        'budgets': unsyncedBudgets.map((b) => b.toMap()).toList(),
+        'fixedExpenses': unsyncedFixedExpenses.map((e) => e.toMap()).toList(),
         'lastSyncTime': _lastSyncTime,
       };
 
-      debugPrint('Syncing ${unsyncedTransactions.length} transactions...');
+      debugPrint('Syncing ${unsyncedTransactions.length} transactions, '
+          '${unsyncedBudgets.length} budgets, '
+          '${unsyncedFixedExpenses.length} fixed expenses...');
 
       // Note: Images are stored locally only, not synced to server
 
@@ -140,9 +152,11 @@ class SyncService {
       if (response.statusCode == 200) {
         final data = response.data;
         final serverTime = data['serverTime'] as String;
-        final downloaded = data['downloaded'] as List;
+        final downloaded = data['downloaded'] as List? ?? [];
+        final downloadedBudgets = data['downloadedBudgets'] as List? ?? [];
+        final downloadedFixedExpenses = data['downloadedFixedExpenses'] as List? ?? [];
         
-        // Save downloaded transactions (images are local-only, not synced)
+        // Save downloaded transactions
         for (final json in downloaded) {
           final transaction = TransactionModel.fromMap(json as Map<String, dynamic>);
           await _repository.insertTransaction(transaction.copyWith(
@@ -150,22 +164,46 @@ class SyncService {
           ));
         }
 
-        // Mark uploaded transactions as synced
+        // Save downloaded budgets
+        for (final json in downloadedBudgets) {
+          final budget = Budget.fromMap(json as Map<String, dynamic>);
+          await _budgetRepository.insertBudget(budget.copyWith(
+            isSynced: true,
+          ));
+        }
+
+        // Save downloaded fixed expenses
+        for (final json in downloadedFixedExpenses) {
+          final expense = FixedExpense.fromMap(json as Map<String, dynamic>);
+          await _fixedExpenseRepository.insertFixedExpense(expense.copyWith(
+            isSynced: true,
+          ));
+        }
+
+        // Mark uploaded items as synced
         for (final t in unsyncedTransactions) {
           await _repository.markAsSynced(t.id);
+        }
+        for (final b in unsyncedBudgets) {
+          await _budgetRepository.markAsSynced(b.id);
+        }
+        for (final e in unsyncedFixedExpenses) {
+          await _fixedExpenseRepository.markAsSynced(e.id);
         }
 
         // Update last sync time
         _lastSyncTime = serverTime;
         await _prefs!.setString(_lastSyncTimeField, serverTime);
 
-        debugPrint('Sync complete: uploaded ${unsyncedTransactions.length}, downloaded ${downloaded.length}');
+        final totalUploaded = unsyncedTransactions.length + unsyncedBudgets.length + unsyncedFixedExpenses.length;
+        final totalDownloaded = downloaded.length + downloadedBudgets.length + downloadedFixedExpenses.length;
+        debugPrint('Sync complete: uploaded $totalUploaded, downloaded $totalDownloaded');
         
         return SyncResult(
           success: true,
           message: '동기화 완료',
-          uploaded: unsyncedTransactions.length,
-          downloaded: downloaded.length,
+          uploaded: totalUploaded,
+          downloaded: totalDownloaded,
         );
       } else {
         return SyncResult(

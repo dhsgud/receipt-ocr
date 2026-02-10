@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/models/category.dart';
 import '../../data/models/fixed_expense.dart';
+import '../../shared/providers/app_providers.dart';
 
 /// 고정비 관리 화면
 class FixedExpenseView extends ConsumerStatefulWidget {
@@ -24,10 +25,10 @@ class _FixedExpenseViewState extends ConsumerState<FixedExpenseView> {
   }
 
   Future<void> _loadFixedExpenses() async {
-    // TODO: 데이터베이스에서 고정비 로드
-    // 임시 샘플 데이터
+    final repo = ref.read(fixedExpenseRepositoryProvider);
+    final expenses = await repo.getAllFixedExpenses();
     setState(() {
-      _fixedExpenses = [];
+      _fixedExpenses = expenses;
     });
   }
 
@@ -485,14 +486,15 @@ class _FixedExpenseViewState extends ConsumerState<FixedExpenseView> {
   // Fixed Expense Operations
   // ============================================================
 
-  void _addFixedExpense({
+  Future<void> _addFixedExpense({
     required String name,
     required double amount,
     required String categoryId,
     required int paymentDay,
     required FixedExpenseFrequency frequency,
     required bool autoRecord,
-  }) {
+  }) async {
+    final syncService = ref.read(syncServiceProvider);
     final expense = FixedExpense.create(
       name: name,
       amount: amount,
@@ -500,20 +502,21 @@ class _FixedExpenseViewState extends ConsumerState<FixedExpenseView> {
       paymentDay: paymentDay,
       frequency: frequency,
       autoRecord: autoRecord,
-      ownerKey: 'default', // TODO: 실제 ownerKey 사용
+      ownerKey: syncService.myKey.isEmpty ? 'default' : syncService.myKey,
     );
 
     setState(() {
       _fixedExpenses.add(expense);
     });
 
-    // TODO: 데이터베이스에 저장
+    // 로컬 저장소에 저장
+    await ref.read(fixedExpenseRepositoryProvider).saveFixedExpense(expense);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('$name 고정비가 추가되었습니다.')),
     );
   }
 
-  void _updateFixedExpense(FixedExpense expense) {
+  Future<void> _updateFixedExpense(FixedExpense expense) async {
     setState(() {
       final index = _fixedExpenses.indexWhere((e) => e.id == expense.id);
       if (index != -1) {
@@ -521,18 +524,20 @@ class _FixedExpenseViewState extends ConsumerState<FixedExpenseView> {
       }
     });
 
-    // TODO: 데이터베이스에 저장
+    // 로컬 저장소에 저장
+    await ref.read(fixedExpenseRepositoryProvider).saveFixedExpense(expense);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('${expense.name} 고정비가 수정되었습니다.')),
     );
   }
 
-  void _deleteFixedExpense(FixedExpense expense) {
+  Future<void> _deleteFixedExpense(FixedExpense expense) async {
     setState(() {
       _fixedExpenses.removeWhere((e) => e.id == expense.id);
     });
 
-    // TODO: 데이터베이스에서 삭제
+    // 로컬 저장소에서 삭제
+    await ref.read(fixedExpenseRepositoryProvider).deleteFixedExpense(expense.id);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('${expense.name} 고정비가 삭제되었습니다.')),
     );

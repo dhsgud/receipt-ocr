@@ -41,6 +41,7 @@ class FixedExpense {
   final DateTime createdAt;
   final DateTime updatedAt;
   final DateTime? lastRecordedDate; // 마지막 기록 날짜
+  final bool isSynced;
 
   const FixedExpense({
     required this.id,
@@ -56,6 +57,7 @@ class FixedExpense {
     required this.createdAt,
     required this.updatedAt,
     this.lastRecordedDate,
+    this.isSynced = false,
   });
 
   /// Create a new fixed expense
@@ -83,6 +85,7 @@ class FixedExpense {
       ownerKey: ownerKey,
       createdAt: now,
       updatedAt: now,
+      isSynced: false,
     );
   }
 
@@ -147,6 +150,7 @@ class FixedExpense {
     DateTime? createdAt,
     DateTime? updatedAt,
     DateTime? lastRecordedDate,
+    bool? isSynced,
   }) {
     return FixedExpense(
       id: id ?? this.id,
@@ -162,6 +166,7 @@ class FixedExpense {
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       lastRecordedDate: lastRecordedDate ?? this.lastRecordedDate,
+      isSynced: isSynced ?? this.isSynced,
     );
   }
 
@@ -181,6 +186,7 @@ class FixedExpense {
       'createdAt': createdAt.toIso8601String(),
       'updatedAt': updatedAt.toIso8601String(),
       'lastRecordedDate': lastRecordedDate?.toIso8601String(),
+      'isSynced': isSynced ? 1 : 0,
     };
   }
 
@@ -202,6 +208,7 @@ class FixedExpense {
       lastRecordedDate: map['lastRecordedDate'] != null 
           ? DateTime.parse(map['lastRecordedDate'] as String) 
           : null,
+      isSynced: map['isSynced'] == 1,
     );
   }
 

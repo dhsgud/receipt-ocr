@@ -10,6 +10,7 @@ class Budget {
   final String ownerKey;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final bool isSynced;
 
   const Budget({
     required this.id,
@@ -20,6 +21,7 @@ class Budget {
     required this.ownerKey,
     required this.createdAt,
     required this.updatedAt,
+    this.isSynced = false,
   });
 
   /// Create a new budget for a month
@@ -40,6 +42,7 @@ class Budget {
       ownerKey: ownerKey,
       createdAt: now,
       updatedAt: now,
+      isSynced: false,
     );
   }
 
@@ -80,6 +83,7 @@ class Budget {
     String? ownerKey,
     DateTime? createdAt,
     DateTime? updatedAt,
+    bool? isSynced,
   }) {
     return Budget(
       id: id ?? this.id,
@@ -90,6 +94,7 @@ class Budget {
       ownerKey: ownerKey ?? this.ownerKey,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      isSynced: isSynced ?? this.isSynced,
     );
   }
 
@@ -118,6 +123,7 @@ class Budget {
       'ownerKey': ownerKey,
       'createdAt': createdAt.toIso8601String(),
       'updatedAt': updatedAt.toIso8601String(),
+      'isSynced': isSynced ? 1 : 0,
     };
   }
 
@@ -134,6 +140,7 @@ class Budget {
       ownerKey: map['ownerKey'] as String,
       createdAt: DateTime.parse(map['createdAt'] as String),
       updatedAt: DateTime.parse(map['updatedAt'] as String),
+      isSynced: map['isSynced'] == 1,
     );
   }
 

@@ -1,5 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/repositories/transaction_repository.dart';
+import '../../data/repositories/budget_repository.dart';
+import '../../data/repositories/fixed_expense_repository.dart';
 import '../../data/services/sllm_service.dart';
 import '../../data/services/sync_service.dart';
 import '../../data/models/transaction.dart';
@@ -7,6 +9,16 @@ import '../../data/models/transaction.dart';
 /// Transaction repository provider
 final transactionRepositoryProvider = Provider<TransactionRepository>((ref) {
   return TransactionRepository();
+});
+
+/// Budget repository provider
+final budgetRepositoryProvider = Provider<BudgetRepository>((ref) {
+  return BudgetRepository();
+});
+
+/// Fixed expense repository provider
+final fixedExpenseRepositoryProvider = Provider<FixedExpenseRepository>((ref) {
+  return FixedExpenseRepository();
 });
 
 /// Gemini OCR service provider
@@ -17,7 +29,9 @@ final sllmServiceProvider = Provider<SllmService>((ref) {
 /// Sync service provider
 final syncServiceProvider = Provider<SyncService>((ref) {
   final repository = ref.watch(transactionRepositoryProvider);
-  return SyncService(repository);
+  final budgetRepository = ref.watch(budgetRepositoryProvider);
+  final fixedExpenseRepository = ref.watch(fixedExpenseRepositoryProvider);
+  return SyncService(repository, budgetRepository, fixedExpenseRepository);
 });
 
 /// All transactions provider with auto-refresh

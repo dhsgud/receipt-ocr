@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/models/category.dart';
 import '../../data/models/budget.dart';
+import '../../shared/providers/app_providers.dart';
 
 /// 예산 관리 화면
 class BudgetManagementView extends ConsumerStatefulWidget {
@@ -19,6 +20,7 @@ class _BudgetManagementViewState
   late int _selectedYear;
   late int _selectedMonth;
   Budget? _currentBudget;
+  Map<String, double> _categorySpending = {};
   final _currencyFormat = NumberFormat.currency(locale: 'ko_KR', symbol: '₩');
 
   @override
@@ -31,15 +33,23 @@ class _BudgetManagementViewState
   }
 
   Future<void> _loadBudget() async {
-    // TODO: 데이터베이스에서 예산 로드
-    // 임시로 기본값 설정
+    final budgetRepo = ref.read(budgetRepositoryProvider);
+    final transactionRepo = ref.read(transactionRepositoryProvider);
+    final syncService = ref.read(syncServiceProvider);
+    
+    final budget = await budgetRepo.getBudget(_selectedYear, _selectedMonth);
+    final spending = await transactionRepo.getMonthlyCategoryTotals(
+      _selectedYear, _selectedMonth,
+    );
+    
     setState(() {
-      _currentBudget = Budget.create(
+      _currentBudget = budget ?? Budget.create(
         year: _selectedYear,
         month: _selectedMonth,
         totalBudget: 0,
-        ownerKey: 'default',
+        ownerKey: syncService.myKey.isEmpty ? 'default' : syncService.myKey,
       );
+      _categorySpending = spending;
     });
   }
 
@@ -220,8 +230,7 @@ class _BudgetManagementViewState
   /// 카테고리 예산 아이템
   Widget _buildCategoryBudgetItem(Category category) {
     final budget = _currentBudget?.getCategoryBudget(category.id) ?? 0;
-    // TODO: 실제 지출 데이터 연동
-    const spent = 0.0;
+    final spent = _categorySpending[category.id] ?? 0;
     final percentage = budget > 0 ? (spent / budget * 100) : 0.0;
     final isOverBudget = spent > budget && budget > 0;
 
@@ -509,7 +518,10 @@ class _BudgetManagementViewState
         updatedAt: DateTime.now(),
       );
     });
-    // TODO: 데이터베이스에 저장
+    // 로컬 저장소에 저장
+    if (_currentBudget != null) {
+      ref.read(budgetRepositoryProvider).saveBudget(_currentBudget!);
+    }
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('총 예산이 ${_currencyFormat.format(amount)}으로 설정되었습니다.')),
     );
@@ -519,7 +531,10 @@ class _BudgetManagementViewState
     setState(() {
       _currentBudget = _currentBudget?.updateCategoryBudget(categoryId, amount);
     });
-    // TODO: 데이터베이스에 저장
+    // 로컬 저장소에 저장
+    if (_currentBudget != null) {
+      ref.read(budgetRepositoryProvider).saveBudget(_currentBudget!);
+    }
     final category = Category.findById(categoryId);
     if (amount > 0) {
       ScaffoldMessenger.of(context).showSnackBar(
