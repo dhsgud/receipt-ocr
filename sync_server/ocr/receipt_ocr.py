@@ -1,53 +1,97 @@
 """
-Receipt OCR Module - Gemini Vision API
-Gemini Flash를 사용한 영수증 이미지 분석 및 JSON 구조화
+Receipt OCR Module - Gemini Vision API (공식 SDK)
+google-generativeai SDK를 사용한 영수증 이미지 분석 및 JSON 구조화
 """
 
 import io
 import json
 import base64
 import os
-import requests
-import random
 import time
 from typing import Optional, Any, Dict
+
 from PIL import Image, ImageFile
+
+import google.generativeai as genai
 
 
 # 손상된/불완전한 이미지 로드 허용
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
-# ============== Gemini API 설정 ==============
+# ============== Gemini SDK 설정 ==============
 DEFAULT_GEMINI_MODEL = "gemini-2.0-flash"
 GEMINI_MODEL = os.environ.get("GEMINI_MODEL", DEFAULT_GEMINI_MODEL)
-GEMINI_API_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
-
-REQUEST_TIMEOUT = 300
 
 
 class ReceiptOCR:
-    """Gemini Vision API 기반 영수증 OCR"""
+    """google-generativeai SDK 기반 영수증 OCR"""
     
     def __init__(self, use_gpu: bool = False, lang: str = 'korean', **kwargs):
         self.lang = lang
+        self.model = None
         
-        # Gemini 키 로드
-        self.gemini_keys = []
-        if os.environ.get("GEMINI_API_KEY_1"):
-            self.gemini_keys.append(os.environ.get("GEMINI_API_KEY_1"))
-        if os.environ.get("GEMINI_API_KEY_2"):
-            self.gemini_keys.append(os.environ.get("GEMINI_API_KEY_2"))
-        if os.environ.get("GEMINI_API_KEY_3"):
-            self.gemini_keys.append(os.environ.get("GEMINI_API_KEY_3"))
+        # Gemini API 키 로드 (여러 키 중 첫 번째 유효 키 사용)
+        api_key = (
+            os.environ.get("GEMINI_API_KEY_1")
+            or os.environ.get("GEMINI_API_KEY_2")
+            or os.environ.get("GEMINI_API_KEY_3")
+            or os.environ.get("GEMINI_API_KEY")
+        )
+        
+        if not api_key:
+            print("[OCR] WARNING: Gemini API key not found!")
+            return
+        
+        try:
+            genai.configure(api_key=api_key)
+            self.model = genai.GenerativeModel(GEMINI_MODEL)
+            print(f"[OCR] Gemini SDK initialized with model: {GEMINI_MODEL}")
+        except Exception as e:
+            print(f"[OCR] Gemini SDK init error: {e}")
 
-    def _call_gemini_text(self, text: str) -> Optional[Dict[str, Any]]:
-        """Gemini에게 텍스트 구조화 요청 (저비용)"""
-        if not text or len(text) < 5:
-            return None
-            
-        print(f"[OCR] Gemini Text structuring... ({len(text)} chars)")
-        
-        prompt = f"""다음 영수증 OCR 텍스트를 분석하여 JSON으로 변환해주세요.
+    # ============== 프롬프트 ==============
+    
+    VISION_PROMPT = """영수증 이미지를 분석하여 JSON으로 정리해주세요.
+
+## 추출 항목
+- store_name: 상호명
+- date: 날짜 (YYYY-MM-DD 형식)
+- total_amount: 합계 금액 (숫자만, 쉼표 없이)
+- category: 카테고리 (아래 목록에서 정확히 선택)
+- is_income: 수입 여부 (true/false, 일반 영수증은 false)
+- items: 품목 목록 [{name, quantity, unit_price, total_price}]
+
+## 지출 카테고리 (is_income: false) - 반드시 아래 이름 중 하나 사용
+- 식비: 식당, 카페, 편의점, 베이커리, 배달, 마트 식품코너
+- 교통비: 주유소, 택시, 대중교통, 기차, 항공, 렌터카, 주차장
+- 주거비: 월세, 관리비, 전기/가스/수도 요금, 인테리어
+- 통신비: 휴대폰, 인터넷, 기기할부
+- 의류/미용: 옷, 신발, 화장품, 미용실, 네일, 세탁
+- 생활용품: 마트(비식품), 다이소, 가구, 가전, 문구
+- 건강/의료: 병원, 약국, 치과, 한의원, 피부과, 안과, 헬스장
+- 여가/문화: 영화, 공연, 서점, 여행, 숙박, 놀이공원, 캠핑, 골프
+- 구독서비스: 넷플릭스, 유튜브프리미엄, 멜론, 앱결제
+- 교육: 학원, 등록금, 강의, 교재
+- 경조사/선물: 축의금, 조의금, 선물, 기부
+- 금융: 대출상환, 수수료, 투자, 적금
+- 육아/자녀: 어린이집, 유아용품, 장난감, 소아과
+- 반려동물: 사료, 동물병원, 반려용품
+- 자동차: 정비, 세차, 타이어, 차량용품
+- 보험: 생명/건강/화재/자동차 보험
+- 세금/공과금: 소득세, 재산세, 국민연금, 건강보험료
+- 기타: 위에 해당하지 않는 경우
+
+## 수입 카테고리 (is_income: true)
+- 월급, 상여금, 수당, 프리랜서수입, 사업소득, 투자수익
+- 배당금, 이자수익, 임대소득, 부수입, 연금, 환급금
+- 장학금, 중고판매, 보험금수령, 퇴직금, 정부지원금, 기타수입
+
+## JSON 형식
+{"store_name": "상호명", "date": "YYYY-MM-DD", "total_amount": 숫자, "category": "카테고리", "is_income": false, "items": [{"name": "품목", "quantity": 1, "unit_price": 0, "total_price": 0}]}
+
+JSON만 응답하세요."""
+
+    TEXT_PROMPT = """다음 영수증 OCR 텍스트를 분석하여 JSON으로 변환해주세요.
 
 [OCR 텍스트]
 {text}
@@ -98,103 +142,82 @@ class ReceiptOCR:
     ]
 }}
 JSON만 응답하세요."""
-        
-        return self._call_gemini_api_base(prompt)
 
-    def _call_gemini_vision(self, image_base64: str) -> Optional[Dict[str, Any]]:
-        """Gemini에게 이미지 분석 요청 (Fallback)"""
-        print("[OCR] Gemini Vision processing...")
-        prompt = """영수증 이미지를 분석하여 JSON으로 정리해주세요.
+    # ============== Gemini SDK 호출 ==============
 
-## 추출 항목
-- store_name: 상호명
-- date: 날짜 (YYYY-MM-DD 형식)
-- total_amount: 합계 금액 (숫자만, 쉼표 없이)
-- category: 카테고리 (아래 목록에서 정확히 선택)
-- is_income: 수입 여부 (true/false, 일반 영수증은 false)
-- items: 품목 목록 [{name, quantity, unit_price, total_price}]
+    def _call_gemini_vision(self, image: Image.Image) -> Optional[Dict[str, Any]]:
+        """Gemini SDK로 이미지 분석 요청"""
+        if not self.model:
+            return None
 
-## 지출 카테고리 (is_income: false) - 반드시 아래 이름 중 하나 사용
-- 식비: 식당, 카페, 편의점, 베이커리, 배달, 마트 식품코너
-- 교통비: 주유소, 택시, 대중교통, 기차, 항공, 렌터카, 주차장
-- 주거비: 월세, 관리비, 전기/가스/수도 요금, 인테리어
-- 통신비: 휴대폰, 인터넷, 기기할부
-- 의류/미용: 옷, 신발, 화장품, 미용실, 네일, 세탁
-- 생활용품: 마트(비식품), 다이소, 가구, 가전, 문구
-- 건강/의료: 병원, 약국, 치과, 한의원, 피부과, 안과, 헬스장
-- 여가/문화: 영화, 공연, 서점, 여행, 숙박, 놀이공원, 캠핑, 골프
-- 구독서비스: 넷플릭스, 유튜브프리미엄, 멜론, 앱결제
-- 교육: 학원, 등록금, 강의, 교재
-- 경조사/선물: 축의금, 조의금, 선물, 기부
-- 금융: 대출상환, 수수료, 투자, 적금
-- 육아/자녀: 어린이집, 유아용품, 장난감, 소아과
-- 반려동물: 사료, 동물병원, 반려용품
-- 자동차: 정비, 세차, 타이어, 차량용품
-- 보험: 생명/건강/화재/자동차 보험
-- 세금/공과금: 소득세, 재산세, 국민연금, 건강보험료
-- 기타: 위에 해당하지 않는 경우
+        print("[OCR] Gemini Vision processing (SDK)...")
+        try:
+            response = self.model.generate_content(
+                [self.VISION_PROMPT, image],
+                generation_config=genai.GenerationConfig(
+                    temperature=0.1,
+                    response_mime_type="application/json",
+                )
+            )
 
-## 수입 카테고리 (is_income: true)
-- 월급, 상여금, 수당, 프리랜서수입, 사업소득, 투자수익
-- 배당금, 이자수익, 임대소득, 부수입, 연금, 환급금
-- 장학금, 중고판매, 보험금수령, 퇴직금, 정부지원금, 기타수입
+            receipt_info = response.text
 
-## JSON 형식
-{"store_name": "상호명", "date": "YYYY-MM-DD", "total_amount": 숫자, "category": "카테고리", "is_income": false, "items": [{"name": "품목", "quantity": 1, "unit_price": 0, "total_price": 0}]}
+            # JSON 추출 (중첩 텍스트 대비)
+            lpos = receipt_info.find("{")
+            if lpos == -1:
+                print(f"[OCR] No JSON found in response: {receipt_info[:100]}")
+                return None
+            receipt_info = receipt_info[lpos:]
+            rpos = receipt_info.rfind("}")
+            receipt_info = receipt_info[:rpos + 1]
 
-JSON만 응답하세요."""
-        return self._call_gemini_api_base(prompt, image_base64)
+            return json.loads(receipt_info)
 
-    def _call_gemini_api_base(self, prompt: str, image_base64: str = None) -> Optional[Dict[str, Any]]:
-        """Gemini API 공통 호출"""
-        if not self.gemini_keys:
+        except json.JSONDecodeError as e:
+            print(f"[OCR] Gemini JSON parse error: {e}")
+            return None
+        except Exception as e:
+            print(f"[OCR] Gemini SDK error: {e}")
+            return None
+
+    def _call_gemini_text(self, text: str) -> Optional[Dict[str, Any]]:
+        """Gemini SDK로 텍스트 구조화 요청 (저비용)"""
+        if not self.model:
+            return None
+        if not text or len(text) < 5:
             return None
             
-        keys = list(self.gemini_keys)
-        random.shuffle(keys)
+        print(f"[OCR] Gemini Text structuring (SDK)... ({len(text)} chars)")
         
-        for api_key in keys:
-             # Retry logic for rate limiting
-            for attempt in range(2): 
-                try:
-                    parts = [{"text": prompt}]
-                    if image_base64:
-                        parts.append({
-                            "inline_data": {
-                                "mime_type": "image/jpeg",
-                                "data": image_base64
-                            }
-                        })
-                    
-                    payload = {
-                        "contents": [{"parts": parts}],
-                        "generationConfig": {
-                            "temperature": 0.1,
-                            "responseMimeType": "application/json"
-                        }
-                    }
-                    
-                    res = requests.post(f"{GEMINI_API_URL}?key={api_key}", json=payload, timeout=60)
-                    if res.status_code == 200:
-                        try:
-                            txt = res.json()['candidates'][0]['content']['parts'][0]['text']
-                            return json.loads(txt)
-                        except Exception as e:
-                            print(f"[OCR] Gemini Parsing Error: {e}, Response: {res.text[:100]}...")
-                            break 
-                    elif res.status_code == 429:
-                        print(f"[OCR] Rate Limit Hit (429). Sleeping 15s before retry...")
-                        time.sleep(15)
-                        continue # Retry same key
-                    else:
-                        print(f"[OCR] Gemini API Error: {res.status_code} - {res.text}")
-                        break
-                except Exception as e:
-                    print(f"[OCR] Gemini Connection Error: {e}")
-                    break
-        return None
+        prompt = self.TEXT_PROMPT.format(text=text)
+        
+        try:
+            response = self.model.generate_content(
+                prompt,
+                generation_config=genai.GenerationConfig(
+                    temperature=0.1,
+                    response_mime_type="application/json",
+                )
+            )
 
+            receipt_info = response.text
+            lpos = receipt_info.find("{")
+            if lpos == -1:
+                return None
+            receipt_info = receipt_info[lpos:]
+            rpos = receipt_info.rfind("}")
+            receipt_info = receipt_info[:rpos + 1]
 
+            return json.loads(receipt_info)
+
+        except json.JSONDecodeError as e:
+            print(f"[OCR] Gemini Text JSON parse error: {e}")
+            return None
+        except Exception as e:
+            print(f"[OCR] Gemini Text SDK error: {e}")
+            return None
+
+    # ============== 응답 정규화 ==============
 
     def _normalize_response(self, result: Dict[str, Any]) -> Dict[str, Any]:
         """OCR 결과 정규화: 문자열 금액을 숫자로 변환, 한글 키를 영문으로 변환"""
@@ -332,15 +355,21 @@ JSON만 응답하세요."""
         
         return '기타'
 
+    # ============== 공개 API ==============
+
     def process_image(self, image_data: bytes) -> Dict[str, Any]:
         """
-        Gemini Vision API로 영수증 이미지 분석
+        Gemini Vision SDK로 영수증 이미지 분석
         """
         start_time = time.time()
-        image_base64 = base64.b64encode(image_data).decode('utf-8')
         
-        print("[OCR] Gemini Vision processing...")
-        vision_result = self._call_gemini_vision(image_base64)
+        # bytes → PIL Image
+        image = Image.open(io.BytesIO(image_data))
+        if image.mode in ('RGBA', 'P'):
+            image = image.convert('RGB')
+        
+        print("[OCR] Gemini Vision processing (SDK)...")
+        vision_result = self._call_gemini_vision(image)
         if vision_result:
             print(f"[OCR] Gemini Vision Success - {time.time()-start_time:.2f}s")
             return self._normalize_response(vision_result)
@@ -350,21 +379,17 @@ JSON만 응답하세요."""
     def process_image_v2(self, image_data: bytes, provider: str = 'gemini') -> Dict[str, Any]:
         """
         Provider-aware OCR processing.
-        Default: 'gemini'
+        현재는 'gemini' SDK만 지원
         """
         print(f"[OCR] Processing with provider: {provider}")
-        
-        # Gemini (default)
         return self.process_image(image_data)
-
-
-
 
     def process_base64(self, base64_image: str) -> Dict[str, Any]:
         if ',' in base64_image:
             base64_image = base64_image.split(',')[1]
         image_data = base64.b64decode(base64_image)
         return self.process_image(image_data)
+
 
 def preprocess_receipt_image(image_data: bytes) -> bytes:
     """영수증 이미지 전처리 (리사이징 및 포맷 변환)"""
@@ -390,4 +415,3 @@ def preprocess_receipt_image(image_data: bytes) -> bytes:
     except Exception as e:
         print(f"[Preprocess] Error: {e}")
         return image_data
-
