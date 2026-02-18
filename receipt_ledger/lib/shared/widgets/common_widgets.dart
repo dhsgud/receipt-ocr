@@ -1,50 +1,73 @@
 import 'package:flutter/material.dart';
 import '../../core/theme/app_theme.dart';
 
-/// Custom styled card widget
+/// Premium styled card with subtle border and optional gradient.
 class StyledCard extends StatelessWidget {
   final Widget child;
-  final EdgeInsets? padding;
+  final EdgeInsetsGeometry? padding;
+  final LinearGradient? gradient;
   final VoidCallback? onTap;
 
   const StyledCard({
     super.key,
     required this.child,
     this.padding,
+    this.gradient,
     this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: padding ?? const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Theme.of(context).cardTheme.color,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: Colors.white.withOpacity(0.1),
-            width: 1,
-          ),
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    Widget card = Container(
+      padding: padding ?? const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: gradient == null
+            ? (isDark ? AppColors.cardDark : AppColors.cardLight)
+            : null,
+        gradient: gradient,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isDark
+              ? AppColors.borderDark.withValues(alpha: 0.5)
+              : AppColors.borderLight.withValues(alpha: 0.5),
+          width: 0.5,
         ),
-        child: child,
+        boxShadow: [
+          BoxShadow(
+            color: isDark
+                ? Colors.black.withValues(alpha: 0.15)
+                : Colors.black.withValues(alpha: 0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
+      child: child,
     );
+
+    if (onTap != null) {
+      return GestureDetector(
+        onTap: onTap,
+        child: card,
+      );
+    }
+    return card;
   }
 }
 
-/// Transaction list item widget
+/// Premium transaction list item with emoji, title, subtitle, and amount.
 class TransactionListItem extends StatelessWidget {
   final String emoji;
   final String title;
   final String subtitle;
   final String amount;
   final bool isIncome;
-  final String? ownerLabel;
-  final bool isMyTransaction;
   final VoidCallback? onTap;
   final VoidCallback? onLongPress;
+  final String? ownerLabel;
+  final bool isMyTransaction;
 
   const TransactionListItem({
     super.key,
@@ -52,62 +75,80 @@ class TransactionListItem extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.amount,
-    this.isIncome = false,
-    this.ownerLabel,
-    this.isMyTransaction = true,
+    required this.isIncome,
     this.onTap,
     this.onLongPress,
+    this.ownerLabel,
+    this.isMyTransaction = true,
   });
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return GestureDetector(
       onTap: onTap,
       onLongPress: onLongPress,
-      borderRadius: BorderRadius.circular(12),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: isDark ? AppColors.cardDark : AppColors.cardLight,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: isDark
+                ? AppColors.borderDark.withValues(alpha: 0.3)
+                : AppColors.borderLight.withValues(alpha: 0.3),
+            width: 0.5,
+          ),
+        ),
         child: Row(
           children: [
+            // Emoji container
             Container(
-              width: 48,
-              height: 48,
+              width: 44,
+              height: 44,
               decoration: BoxDecoration(
-                color: AppColors.primary.withOpacity(0.1),
+                color: isDark
+                    ? AppColors.cardDarkElevated
+                    : AppColors.cardLightElevated,
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Center(
-                child: Text(emoji, style: const TextStyle(fontSize: 24)),
+                child: Text(emoji, style: const TextStyle(fontSize: 22)),
               ),
             ),
             const SizedBox(width: 12),
+            // Details
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
                     children: [
-                      Flexible(
+                      Expanded(
                         child: Text(
                           title,
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w500,
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                            color: isDark
+                                ? AppColors.textPrimaryDark
+                                : AppColors.textPrimaryLight,
                           ),
+                          maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      if (ownerLabel != null && ownerLabel!.isNotEmpty) ...[
+                      if (ownerLabel != null) ...[
                         const SizedBox(width: 6),
                         Container(
                           padding: const EdgeInsets.symmetric(
-                            horizontal: 6,
-                            vertical: 2,
-                          ),
+                              horizontal: 6, vertical: 2),
                           decoration: BoxDecoration(
                             color: isMyTransaction
-                                ? AppColors.primary.withOpacity(0.15)
-                                : Colors.orange.withOpacity(0.15),
+                                ? AppColors.primary.withValues(alpha: 0.12)
+                                : AppColors.accent.withValues(alpha: 0.12),
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: Text(
@@ -117,30 +158,37 @@ class TransactionListItem extends StatelessWidget {
                               fontWeight: FontWeight.w600,
                               color: isMyTransaction
                                   ? AppColors.primary
-                                  : Colors.orange,
+                                  : AppColors.accent,
                             ),
                           ),
                         ),
                       ],
                     ],
                   ),
-                  const SizedBox(height: 2),
+                  const SizedBox(height: 3),
                   Text(
                     subtitle,
                     style: TextStyle(
-                      fontSize: 13,
-                      color: Colors.grey[500],
+                      fontSize: 12,
+                      color: isDark
+                          ? AppColors.textTertiaryDark
+                          : AppColors.textTertiaryLight,
                     ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ],
               ),
             ),
+            const SizedBox(width: 8),
+            // Amount
             Text(
               '${isIncome ? '+' : '-'}$amount',
               style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
                 color: isIncome ? AppColors.income : AppColors.expense,
+                letterSpacing: -0.3,
               ),
             ),
           ],
@@ -150,51 +198,75 @@ class TransactionListItem extends StatelessWidget {
   }
 }
 
-/// Summary stat card widget
+/// Premium statistics card.
 class StatCard extends StatelessWidget {
   final String label;
   final String value;
+  final IconData icon;
+  final Color? color;
   final Color? valueColor;
-  final IconData? icon;
 
   const StatCard({
     super.key,
     required this.label,
     required this.value,
+    required this.icon,
+    this.color,
     this.valueColor,
-    this.icon,
   });
 
   @override
   Widget build(BuildContext context) {
-    return StyledCard(
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardColor = valueColor ?? color ?? AppColors.primary;
+
+    return Container(
       padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isDark ? AppColors.cardDark : AppColors.cardLight,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isDark
+              ? AppColors.borderDark.withValues(alpha: 0.3)
+              : AppColors.borderLight.withValues(alpha: 0.3),
+          width: 0.5,
+        ),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              if (icon != null) ...[
-                Icon(icon, size: 18, color: Colors.grey[500]),
-                const SizedBox(width: 6),
-              ],
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 13,
-                  color: Colors.grey[500],
-                ),
-              ),
-            ],
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: cardColor.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, size: 20, color: cardColor),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+              color: isDark
+                  ? AppColors.textSecondaryDark
+                  : AppColors.textSecondaryLight,
+            ),
+          ),
+          const SizedBox(height: 4),
           Text(
             value,
             style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: valueColor,
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+              color: isDark
+                  ? AppColors.textPrimaryDark
+                  : AppColors.textPrimaryLight,
+              letterSpacing: -0.3,
             ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
         ],
       ),
@@ -202,55 +274,68 @@ class StatCard extends StatelessWidget {
   }
 }
 
-/// Empty state widget
+/// Premium empty state with icon and messages.
 class EmptyState extends StatelessWidget {
   final IconData icon;
   final String title;
   final String subtitle;
-  final Widget? action;
 
   const EmptyState({
     super.key,
     required this.icon,
     required this.title,
     required this.subtitle,
-    this.action,
   });
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              icon,
-              size: 64,
-              color: Colors.grey[600],
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: isDark
+                    ? AppColors.cardDark
+                    : AppColors.cardLightElevated,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                icon,
+                size: 40,
+                color: isDark
+                    ? AppColors.textTertiaryDark
+                    : AppColors.textTertiaryLight,
+              ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
             Text(
               title,
-              style: const TextStyle(
-                fontSize: 18,
+              style: TextStyle(
+                fontSize: 16,
                 fontWeight: FontWeight.w600,
+                color: isDark
+                    ? AppColors.textSecondaryDark
+                    : AppColors.textSecondaryLight,
               ),
+              textAlign: TextAlign.center,
             ),
             const SizedBox(height: 8),
             Text(
               subtitle,
-              textAlign: TextAlign.center,
               style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey[500],
+                fontSize: 13,
+                color: isDark
+                    ? AppColors.textTertiaryDark
+                    : AppColors.textTertiaryLight,
               ),
+              textAlign: TextAlign.center,
             ),
-            if (action != null) ...[
-              const SizedBox(height: 24),
-              action!,
-            ],
           ],
         ),
       ),

@@ -6,7 +6,6 @@ import '../../core/utils/formatters.dart';
 import '../../data/models/category.dart';
 import '../../shared/providers/app_providers.dart';
 import '../../shared/widgets/common_widgets.dart';
-import '../../shared/widgets/banner_ad_widget.dart';
 
 class StatisticsScreen extends ConsumerWidget {
   const StatisticsScreen({super.key});
@@ -16,6 +15,7 @@ class StatisticsScreen extends ConsumerWidget {
     final currentMonth = ref.watch(currentMonthProvider);
     final monthlyStats = ref.watch(monthlyStatsProvider);
     final ownerFilter = ref.watch(statsOwnerFilterProvider);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
       appBar: AppBar(
@@ -23,7 +23,6 @@ class StatisticsScreen extends ConsumerWidget {
         actions: [
           IconButton(
             onPressed: () {
-              // Previous month
               ref.read(currentMonthProvider.notifier).state = DateTime(
                 currentMonth.year,
                 currentMonth.month - 1,
@@ -40,7 +39,6 @@ class StatisticsScreen extends ConsumerWidget {
           ),
           IconButton(
             onPressed: () {
-              // Next month
               ref.read(currentMonthProvider.notifier).state = DateTime(
                 currentMonth.year,
                 currentMonth.month + 1,
@@ -55,60 +53,22 @@ class StatisticsScreen extends ConsumerWidget {
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
             child: Container(
               decoration: BoxDecoration(
-                color: Theme.of(context).cardColor,
+                color: isDark ? AppColors.cardDark : AppColors.cardLightElevated,
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Row(
                 children: [
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: () => ref.read(statsOwnerFilterProvider.notifier).state = StatsOwnerFilter.all,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 8),
-                        decoration: BoxDecoration(
-                          color: ownerFilter == StatsOwnerFilter.all
-                              ? AppColors.primary
-                              : Colors.transparent,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          '👨‍👩‍👧 전체',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: ownerFilter == StatsOwnerFilter.all
-                                ? Colors.white
-                                : Colors.grey,
-                          ),
-                        ),
-                      ),
-                    ),
+                  _buildFilterTab(
+                    ref: ref,
+                    label: '👨‍👩‍👧 전체',
+                    isSelected: ownerFilter == StatsOwnerFilter.all,
+                    onTap: () => ref.read(statsOwnerFilterProvider.notifier).state = StatsOwnerFilter.all,
                   ),
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: () => ref.read(statsOwnerFilterProvider.notifier).state = StatsOwnerFilter.mine,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 8),
-                        decoration: BoxDecoration(
-                          color: ownerFilter == StatsOwnerFilter.mine
-                              ? AppColors.primary
-                              : Colors.transparent,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          '🙋 나만',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: ownerFilter == StatsOwnerFilter.mine
-                                ? Colors.white
-                                : Colors.grey,
-                          ),
-                        ),
-                      ),
-                    ),
+                  _buildFilterTab(
+                    ref: ref,
+                    label: '🙋 나만',
+                    isSelected: ownerFilter == StatsOwnerFilter.mine,
+                    onTap: () => ref.read(statsOwnerFilterProvider.notifier).state = StatsOwnerFilter.mine,
                   ),
                 ],
               ),
@@ -121,12 +81,42 @@ class StatisticsScreen extends ConsumerWidget {
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (_, __) => const Center(child: Text('오류가 발생했습니다')),
       ),
-      // 배너 광고 (AdMob 설정 후 활성화)
-      // bottomNavigationBar: const BottomBannerAd(),
+    );
+  }
+
+  Widget _buildFilterTab({
+    required WidgetRef ref,
+    required String label,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          decoration: BoxDecoration(
+            color: isSelected ? AppColors.primary : Colors.transparent,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Text(
+            label,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: isSelected ? Colors.white : Colors.grey,
+            ),
+          ),
+        ),
+      ),
     );
   }
 
   Widget _buildContent(BuildContext context, MonthlyStats stats) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     if (stats.expense == 0 && stats.income == 0) {
       return const EmptyState(
         icon: Icons.pie_chart_outline,
@@ -173,11 +163,14 @@ class StatisticsScreen extends ConsumerWidget {
 
           // Pie Chart
           if (stats.categoryTotals.isNotEmpty) ...[
-            const Text(
+            Text(
               '카테고리별 지출',
               style: TextStyle(
                 fontSize: 18,
-                fontWeight: FontWeight.bold,
+                fontWeight: FontWeight.w700,
+                color: isDark
+                    ? AppColors.textPrimaryDark
+                    : AppColors.textPrimaryLight,
               ),
             ),
             const SizedBox(height: 20),
@@ -198,6 +191,7 @@ class StatisticsScreen extends ConsumerWidget {
               final category = Category.findByName(entry.key);
               final percentage = entry.value / stats.expense * 100;
               return _buildCategoryItem(
+                context,
                 category,
                 entry.value,
                 percentage,
@@ -234,16 +228,30 @@ class StatisticsScreen extends ConsumerWidget {
     }).toList();
   }
 
-  Widget _buildCategoryItem(Category category, double amount, double percentage) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
+  Widget _buildCategoryItem(
+      BuildContext context, Category category, double amount, double percentage) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: isDark ? AppColors.cardDark : AppColors.cardLight,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: isDark
+              ? AppColors.borderDark.withValues(alpha: 0.3)
+              : AppColors.borderLight.withValues(alpha: 0.3),
+          width: 0.5,
+        ),
+      ),
       child: Row(
         children: [
           Container(
             width: 40,
             height: 40,
             decoration: BoxDecoration(
-              color: category.color.withOpacity(0.2),
+              color: category.color.withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Center(
@@ -257,18 +265,23 @@ class StatisticsScreen extends ConsumerWidget {
               children: [
                 Text(
                   category.name,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 15,
-                    fontWeight: FontWeight.w500,
+                    fontWeight: FontWeight.w600,
+                    color: isDark
+                        ? AppColors.textPrimaryDark
+                        : AppColors.textPrimaryLight,
                   ),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 6),
                 ClipRRect(
                   borderRadius: BorderRadius.circular(4),
                   child: LinearProgressIndicator(
                     value: percentage / 100,
-                    backgroundColor: Colors.grey.withOpacity(0.2),
-                    valueColor: AlwaysStoppedAnimation(category.color),
+                    backgroundColor: isDark
+                        ? AppColors.cardDarkElevated
+                        : AppColors.cardLightElevated,
+                    color: category.color,
                     minHeight: 6,
                   ),
                 ),
@@ -281,16 +294,22 @@ class StatisticsScreen extends ConsumerWidget {
             children: [
               Text(
                 Formatters.currency(amount),
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 14,
-                  fontWeight: FontWeight.bold,
+                  fontWeight: FontWeight.w700,
+                  color: isDark
+                      ? AppColors.textPrimaryDark
+                      : AppColors.textPrimaryLight,
                 ),
               ),
+              const SizedBox(height: 2),
               Text(
                 '${percentage.toStringAsFixed(1)}%',
                 style: TextStyle(
                   fontSize: 12,
-                  color: Colors.grey[500],
+                  color: isDark
+                      ? AppColors.textTertiaryDark
+                      : AppColors.textTertiaryLight,
                 ),
               ),
             ],

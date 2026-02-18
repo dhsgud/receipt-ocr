@@ -30,9 +30,9 @@ class ReceiptImageViewer extends StatelessWidget {
           height: 80,
           width: double.infinity,
           decoration: BoxDecoration(
-            color: Colors.grey.withOpacity(0.1),
+            color: Colors.grey.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: Colors.grey.withOpacity(0.3)),
+            border: Border.all(color: Colors.grey.withValues(alpha: 0.3)),
           ),
           child: const Center(
             child: Column(

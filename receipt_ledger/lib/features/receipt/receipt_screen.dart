@@ -18,62 +18,9 @@ import '../../data/services/budget_alert_service.dart';
 import '../../data/services/ad_service.dart';
 import '../../core/entitlements.dart';
 
-/// 일괄 처리용 영수증 아이템
-class BatchReceiptItem {
-  final XFile file;
-  final Uint8List bytes;
-  bool isProcessing;
-  bool isProcessed;
-  ReceiptData? receiptData;
-  String? errorMessage;
-  
-  // 폼 데이터 (수정 가능)
-  String description;
-  String amount;
-  DateTime date;
-  String category;
-  bool isIncome;
-  bool isSelected; // 저장 대상 여부
-
-  BatchReceiptItem({
-    required this.file,
-    required this.bytes,
-    this.isProcessing = false,
-    this.isProcessed = false,
-    this.receiptData,
-    this.errorMessage,
-    this.description = '',
-    this.amount = '',
-    DateTime? date,
-    this.category = '기타',
-    this.isIncome = false,
-    this.isSelected = true,
-  }) : date = date ?? DateTime.now();
-
-  /// OCR 결과로 폼 데이터 업데이트
-  void updateFromReceiptData(ReceiptData data, String Function(String) guessCategory) {
-    receiptData = data;
-    if (data.storeName != null) {
-      description = data.storeName!;
-    }
-    if (data.totalAmount != null) {
-      amount = data.totalAmount!.toStringAsFixed(0);
-    }
-    if (data.date != null) {
-      date = data.date!;
-    }
-    if (data.category != null && data.category!.isNotEmpty) {
-      category = Category.matchOcrCategory(
-        data.category!,
-        isIncome: data.isIncome,
-      );
-    } else {
-      category = guessCategory(data.storeName ?? '');
-    }
-    // 수입 여부 자동 설정
-    isIncome = data.isIncome;
-  }
-}
+import 'models/batch_receipt_item.dart';
+import 'widgets/receipt_form.dart';
+import 'widgets/batch_mode_view.dart';
 
 class ReceiptScreen extends ConsumerStatefulWidget {
   const ReceiptScreen({super.key});
@@ -455,11 +402,7 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
     final tier = subscription.tier;
     
     final remainingQuota = quotaState.getRemainingFreeQuota();
-    
-    // Free 등급이고 총 사용량이 소진된 경우
     final bool isFreeExhausted = tier == SubscriptionTier.free && remainingQuota <= 0;
-    
-    // 리워드 광고 준비 여부
     final bool canWatchAd = adNotifier.isRewardedAdReady && isFreeExhausted;
     
     final result = await showDialog<String>(
@@ -493,9 +436,9 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.orange.withOpacity(0.1),
+                  color: Colors.orange.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.orange.withOpacity(0.3)),
+                  border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
                 ),
                 child: const Row(
                   children: [
@@ -511,12 +454,11 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
                 ),
               ),
               const SizedBox(height: 16),
-              // 광고 시청 옵션
               if (canWatchAd)
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Colors.green.withOpacity(0.1),
+                    color: Colors.green.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: const Row(
@@ -537,7 +479,7 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: const Color(0xFF6366F1).withOpacity(0.1),
+                color: const Color(0xFF6366F1).withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: const Column(
@@ -563,14 +505,12 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
           ],
         ),
         actions: [
-          // 광고 시청 버튼
           if (canWatchAd)
             TextButton.icon(
               onPressed: () => Navigator.of(context).pop('watchAd'),
               icon: const Icon(Icons.play_circle_outline, color: Colors.green),
               label: const Text('광고 보기', style: TextStyle(color: Colors.green)),
             ),
-          // 수동 입력 버튼 (소진되지 않은 경우)
           if (!isFreeExhausted)
             TextButton(
               onPressed: () => Navigator.of(context).pop('manual'),
@@ -593,7 +533,6 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
     if (!mounted) return;
     
     if (result == 'watchAd') {
-      // 광고 시청
       final rewarded = await adNotifier.showRewardedAd(
         onRewarded: () async {
           await ref.read(quotaProvider.notifier).addBonusFromAd();
@@ -644,7 +583,6 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
     );
 
     if (shouldCancel == true && mounted) {
-      // 진행 중인 OCR 요청 취소
       _ocrCancelToken?.cancel('Cancelled by user');
       _ocrCancelToken = null;
       
@@ -698,7 +636,6 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
     );
 
     if (duplicate != null && mounted) {
-      // Show confirmation dialog
       final shouldContinue = await showDialog<bool>(
         context: context,
         builder: (context) => AlertDialog(
@@ -718,7 +655,7 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.grey.withAlpha(30),
+                  color: Colors.grey.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Column(
@@ -815,7 +752,12 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
   Widget build(BuildContext context) {
     // 일괄 처리 모드일 때는 별도 UI 표시
     if (_isBatchMode) {
-      return _buildBatchModeUI();
+      return BatchModeView(
+        items: _batchItems,
+        isProcessing: _isBatchProcessing,
+        onCancel: _cancelBatchMode,
+        onSave: _saveBatchTransactions,
+      );
     }
 
     return Scaffold(
@@ -870,9 +812,9 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: AppColors.expense.withAlpha(25),
+                  color: AppColors.expense.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppColors.expense.withAlpha(75)),
+                  border: Border.all(color: AppColors.expense.withValues(alpha: 0.3)),
                 ),
                 child: Row(
                   children: [
@@ -894,9 +836,9 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
                 margin: const EdgeInsets.only(top: 16),
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: Colors.blue.withAlpha(25),
+                  color: Colors.blue.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.blue.withAlpha(75)),
+                  border: Border.all(color: Colors.blue.withValues(alpha: 0.3)),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -948,34 +890,24 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
                             style: const TextStyle(fontSize: 12, color: Colors.grey)),
                         ),
                     ],
-                    const SizedBox(height: 8),
-                    ExpansionTile(
-                      title: const Text('원본 텍스트 보기', style: TextStyle(fontSize: 12)),
-                      tilePadding: EdgeInsets.zero,
-                      childrenPadding: const EdgeInsets.only(top: 8),
-                      children: [
-                        Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: Colors.grey.withAlpha(30),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Text(
-                            _receiptData!.rawText ?? '(없음)',
-                            style: const TextStyle(fontSize: 10, fontFamily: 'monospace'),
-                          ),
-                        ),
-                      ],
-                    ),
                   ],
                 ),
               ),
 
-            // Form Fields
+            // Form Fields using Extracted Widget
             if (!_isProcessing) ...[
               const SizedBox(height: 16),
-              _buildFormFields(),
+              ReceiptForm(
+                amountController: _amountController,
+                descriptionController: _descriptionController,
+                isIncome: _isIncome,
+                selectedDate: _selectedDate,
+                selectedCategory: _selectedCategory,
+                onIncomeChanged: (val) => setState(() => _isIncome = val),
+                onDateChanged: (val) => setState(() => _selectedDate = val),
+                onCategoryChanged: (val) => setState(() => _selectedCategory = val),
+                onSave: _saveTransaction,
+              ),
             ],
           ],
         ),
@@ -983,337 +915,14 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
     );
   }
 
-  /// 일괄 처리 모드 UI
-  Widget _buildBatchModeUI() {
-    final processedCount = _batchItems.where((item) => item.isProcessed).length;
-    final totalCount = _batchItems.length;
-    final selectedCount = _batchItems.where((item) => item.isSelected && item.isProcessed && item.errorMessage == null).length;
-
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('일괄 등록 ($totalCount장)'),
-        leading: IconButton(
-          icon: const Icon(Icons.close),
-          onPressed: _cancelBatchMode,
-        ),
-        actions: [
-          if (!_isBatchProcessing && processedCount > 0)
-            TextButton.icon(
-              onPressed: selectedCount > 0 ? _saveBatchTransactions : null,
-              icon: const Icon(Icons.save, size: 18),
-              label: Text('저장 ($selectedCount건)'),
-              style: TextButton.styleFrom(
-                foregroundColor: selectedCount > 0 ? AppColors.primary : Colors.grey,
-              ),
-            ),
-        ],
-      ),
-      body: Column(
+  Widget _buildDebugRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
         children: [
-          // 진행 상태 표시
-          if (_isBatchProcessing)
-            Container(
-              padding: const EdgeInsets.all(16),
-              color: AppColors.primary.withAlpha(25),
-              child: Row(
-                children: [
-                  const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
-                  ),
-                  const SizedBox(width: 12),
-                  Text('분석 중... ($processedCount / $totalCount)'),
-                  const Spacer(),
-                  LinearProgressIndicator(
-                    value: totalCount > 0 ? processedCount / totalCount : 0,
-                    backgroundColor: Colors.grey.withAlpha(50),
-                    valueColor: const AlwaysStoppedAnimation(AppColors.primary),
-                  ),
-                ],
-              ),
-            )
-          else if (processedCount == totalCount)
-            Container(
-              padding: const EdgeInsets.all(12),
-              color: AppColors.income.withAlpha(25),
-              child: Row(
-                children: [
-                  const Icon(Icons.check_circle, color: AppColors.income, size: 20),
-                  const SizedBox(width: 8),
-                  Text('$totalCount장 분석 완료! 저장할 항목을 선택하세요.'),
-                ],
-              ),
-            ),
-
-          // 일괄 선택/해제 버튼
-          if (!_isBatchProcessing && processedCount > 0)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Row(
-                children: [
-                  TextButton.icon(
-                    onPressed: () {
-                      setState(() {
-                        for (var item in _batchItems) {
-                          if (item.isProcessed && item.errorMessage == null) {
-                            item.isSelected = true;
-                          }
-                        }
-                      });
-                    },
-                    icon: const Icon(Icons.select_all, size: 18),
-                    label: const Text('전체 선택'),
-                  ),
-                  const SizedBox(width: 8),
-                  TextButton.icon(
-                    onPressed: () {
-                      setState(() {
-                        for (var item in _batchItems) {
-                          item.isSelected = false;
-                        }
-                      });
-                    },
-                    icon: const Icon(Icons.deselect, size: 18),
-                    label: const Text('전체 해제'),
-                  ),
-                ],
-              ),
-            ),
-
-          // 영수증 리스트
-          Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: _batchItems.length,
-              itemBuilder: (context, index) => _buildBatchItemCard(index),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// 개별 일괄 처리 아이템 카드
-  Widget _buildBatchItemCard(int index) {
-    final item = _batchItems[index];
-
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(
-          color: item.isSelected && item.errorMessage == null
-              ? AppColors.primary.withAlpha(100)
-              : Colors.transparent,
-          width: 2,
-        ),
-      ),
-      child: Column(
-        children: [
-          // 헤더 (이미지 썸네일 + 상태)
-          InkWell(
-            onTap: item.isProcessed && item.errorMessage == null
-                ? () => setState(() => item.isSelected = !item.isSelected)
-                : null,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Row(
-                children: [
-                  // 썸네일 이미지
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: Image.memory(
-                      item.bytes,
-                      width: 60,
-                      height: 60,
-                      fit: BoxFit.cover,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-
-                  // 상태 및 정보
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          '영수증 ${index + 1}',
-                          style: const TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                        const SizedBox(height: 4),
-                        if (item.isProcessing)
-                          const Row(
-                            children: [
-                              SizedBox(
-                                width: 14,
-                                height: 14,
-                                child: CircularProgressIndicator(strokeWidth: 2),
-                              ),
-                              SizedBox(width: 8),
-                              Text('분석 중...', style: TextStyle(color: Colors.grey, fontSize: 12)),
-                            ],
-                          )
-                        else if (item.errorMessage != null)
-                          Row(
-                            children: [
-                              const Icon(Icons.error, color: AppColors.expense, size: 14),
-                              const SizedBox(width: 4),
-                              Expanded(
-                                child: Text(
-                                  item.errorMessage!,
-                                  style: const TextStyle(color: AppColors.expense, fontSize: 12),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            ],
-                          )
-                        else if (item.isProcessed)
-                          Row(
-                            children: [
-                              const Icon(Icons.check_circle, color: AppColors.income, size: 14),
-                              const SizedBox(width: 4),
-                              Text(
-                                item.description.isNotEmpty ? item.description : '(상점명 없음)',
-                                style: const TextStyle(fontSize: 12),
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                '₩${item.amount.isNotEmpty ? item.amount : "0"}',
-                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-                              ),
-                            ],
-                          )
-                        else
-                          const Text('대기 중...', style: TextStyle(color: Colors.grey, fontSize: 12)),
-                      ],
-                    ),
-                  ),
-
-                  // 체크박스 (처리 완료 시)
-                  if (item.isProcessed && item.errorMessage == null)
-                    Checkbox(
-                      value: item.isSelected,
-                      onChanged: (value) => setState(() => item.isSelected = value ?? false),
-                      activeColor: AppColors.primary,
-                    ),
-                ],
-              ),
-            ),
-          ),
-
-          // 편집 가능한 폼 (선택된 항목만)
-          if (item.isProcessed && item.errorMessage == null && item.isSelected)
-            Container(
-              padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-              child: Column(
-                children: [
-                  const Divider(),
-                  const SizedBox(height: 8),
-                  // 설명 (상점명)
-                  TextField(
-                    controller: TextEditingController(text: item.description)..selection = TextSelection.collapsed(offset: item.description.length),
-                    onChanged: (value) => item.description = value,
-                    decoration: InputDecoration(
-                      labelText: '설명',
-                      isDense: true,
-                      filled: true,
-                      fillColor: Theme.of(context).cardTheme.color,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        borderSide: BorderSide.none,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      // 금액
-                      Expanded(
-                        child: TextField(
-                          controller: TextEditingController(text: item.amount)..selection = TextSelection.collapsed(offset: item.amount.length),
-                          onChanged: (value) => item.amount = value,
-                          keyboardType: TextInputType.number,
-                          decoration: InputDecoration(
-                            labelText: '금액',
-                            prefixText: '₩ ',
-                            isDense: true,
-                            filled: true,
-                            fillColor: Theme.of(context).cardTheme.color,
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(8),
-                              borderSide: BorderSide.none,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      // 카테고리 드롭다운
-                      Expanded(
-                        child: DropdownButtonFormField<String>(
-                          value: Category.defaultCategories.any((c) => c.name == item.category)
-                              ? item.category
-                              : '기타',
-                          decoration: InputDecoration(
-                            labelText: '카테고리',
-                            isDense: true,
-                            filled: true,
-                            fillColor: Theme.of(context).cardTheme.color,
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(8),
-                              borderSide: BorderSide.none,
-                            ),
-                          ),
-                          items: Category.defaultCategories
-                              .where((c) => c.name != '수입')
-                              .map((c) => DropdownMenuItem(
-                                    value: c.name,
-                                    child: Text('${c.emoji} ${c.name}', style: const TextStyle(fontSize: 12)),
-                                  ))
-                              .toList(),
-                          onChanged: (value) => setState(() => item.category = value ?? '기타'),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  // 날짜 선택
-                  InkWell(
-                    onTap: () async {
-                      final date = await showDatePicker(
-                        context: context,
-                        initialDate: item.date,
-                        firstDate: DateTime(2020),
-                        lastDate: DateTime.now().add(const Duration(days: 1)),
-                      );
-                      if (date != null) {
-                        setState(() => item.date = date);
-                      }
-                    },
-                    borderRadius: BorderRadius.circular(8),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).cardTheme.color,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.calendar_today, size: 16, color: AppColors.primary),
-                          const SizedBox(width: 8),
-                          Text(
-                            Formatters.dateKorean(item.date),
-                            style: const TextStyle(fontSize: 14),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
+          Text('$label:', style: const TextStyle(fontWeight: FontWeight.w500)),
+          const SizedBox(width: 8),
+          Expanded(child: Text(value, style: const TextStyle(color: Colors.black87))),
         ],
       ),
     );
@@ -1349,10 +958,10 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
           child: Container(
             height: 80,
             decoration: BoxDecoration(
-              color: AppColors.primary.withAlpha(25),
+              color: AppColors.primary.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
-                color: AppColors.primary.withAlpha(100),
+                color: AppColors.primary.withValues(alpha: 0.3),
                 width: 2,
                 strokeAlign: BorderSide.strokeAlignInside,
               ),
@@ -1405,7 +1014,7 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
           color: Theme.of(context).cardTheme.color,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: AppColors.primary.withAlpha(75),
+            color: AppColors.primary.withValues(alpha: 0.3),
             width: 2,
             strokeAlign: BorderSide.strokeAlignInside,
           ),
@@ -1449,7 +1058,7 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.6),
+                color: Colors.black.withValues(alpha: 0.6),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: const Row(
@@ -1514,461 +1123,6 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
             ),
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildFormFields() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Income/Expense Toggle
-        Container(
-          padding: const EdgeInsets.all(4),
-          decoration: BoxDecoration(
-            color: Theme.of(context).cardTheme.color,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: _buildToggleButton(
-                  label: '지출',
-                  isSelected: !_isIncome,
-                  onTap: () => setState(() => _isIncome = false),
-                  color: AppColors.expense,
-                ),
-              ),
-              Expanded(
-                child: _buildToggleButton(
-                  label: '수입',
-                  isSelected: _isIncome,
-                  onTap: () => setState(() => _isIncome = true),
-                  color: AppColors.income,
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 20),
-
-        // Amount
-        TextField(
-          controller: _amountController,
-          keyboardType: TextInputType.number,
-          style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-          decoration: InputDecoration(
-            labelText: '금액',
-            prefixText: '₩ ',
-            filled: true,
-            fillColor: Theme.of(context).cardTheme.color,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide.none,
-            ),
-          ),
-        ),
-        const SizedBox(height: 16),
-
-        // Description
-        TextField(
-          controller: _descriptionController,
-          decoration: InputDecoration(
-            labelText: '설명',
-            hintText: '거래 내용을 입력하세요',
-            filled: true,
-            fillColor: Theme.of(context).cardTheme.color,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide.none,
-            ),
-          ),
-        ),
-        const SizedBox(height: 16),
-
-        // Category
-        _buildCategorySelector(),
-        const SizedBox(height: 16),
-
-        // Date
-        InkWell(
-          onTap: () async {
-            final date = await showDatePicker(
-              context: context,
-              initialDate: _selectedDate,
-              firstDate: DateTime(2020),
-              lastDate: DateTime.now().add(const Duration(days: 1)),
-            );
-            if (date != null) {
-              setState(() => _selectedDate = date);
-            }
-          },
-          borderRadius: BorderRadius.circular(12),
-          child: Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Theme.of(context).cardTheme.color,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.calendar_today, color: AppColors.primary),
-                const SizedBox(width: 12),
-                Text(
-                  Formatters.dateKorean(_selectedDate),
-                  style: const TextStyle(fontSize: 16),
-                ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 24),
-
-        // Save Button
-        SizedBox(
-          width: double.infinity,
-          height: 56,
-          child: ElevatedButton(
-            onPressed: _saveTransaction,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-            ),
-            child: const Text(
-              '저장하기',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildToggleButton({
-    required String label,
-    required bool isSelected,
-    required VoidCallback onTap,
-    required Color color,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        decoration: BoxDecoration(
-          color: isSelected ? color : Colors.transparent,
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Text(
-          label,
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-            color: isSelected ? Colors.white : Colors.grey,
-          ),
-        ),
-      ),
-    );
-  }
-
-  /// 퀵 카테고리 ID 목록
-  static const _quickExpenseIds = ['food', 'housing', 'health'];
-  static const _quickIncomeIds = ['income_salary'];
-
-  Widget _buildCategorySelector() {
-    // 지출/수입에 따라 퀵 카테고리 결정
-    final List<Category> quickCategories;
-    if (_isIncome) {
-      quickCategories = Category.incomeCategories
-          .where((c) => _quickIncomeIds.contains(c.id))
-          .toList();
-    } else {
-      quickCategories = Category.expenseParentCategories
-          .where((c) => _quickExpenseIds.contains(c.id))
-          .toList();
-    }
-
-    // 현재 선택된 카테고리가 퀵 목록에 없으면 표시용으로 추가
-    final selectedCat = (_isIncome ? Category.incomeCategories : Category.expenseParentCategories)
-        .cast<Category?>()
-        .firstWhere((c) => c?.name == _selectedCategory, orElse: () => null);
-    final bool isSelectedInQuick = quickCategories.any((c) => c.name == _selectedCategory);
-
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: [
-        // 퀵 카테고리 칩들
-        ...quickCategories.map((category) {
-          final isSelected = _selectedCategory == category.name;
-          return GestureDetector(
-            onTap: () => setState(() => _selectedCategory = category.name),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              decoration: BoxDecoration(
-                color: isSelected
-                    ? category.color.withAlpha(50)
-                    : Theme.of(context).cardTheme.color,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                  color: isSelected ? category.color : Colors.transparent,
-                  width: 2,
-                ),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(category.emoji, style: const TextStyle(fontSize: 16)),
-                  const SizedBox(width: 6),
-                  Text(
-                    category.name,
-                    style: TextStyle(
-                      fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          );
-        }),
-
-        // 퀵 목록에 없는 카테고리가 선택된 경우 해당 칩 표시
-        if (!isSelectedInQuick && selectedCat != null)
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            decoration: BoxDecoration(
-              color: selectedCat.color.withAlpha(50),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: selectedCat.color, width: 2),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(selectedCat.emoji, style: const TextStyle(fontSize: 16)),
-                const SizedBox(width: 6),
-                Text(
-                  selectedCat.name,
-                  style: const TextStyle(fontWeight: FontWeight.w600),
-                ),
-              ],
-            ),
-          ),
-
-        // 더보기 버튼
-        GestureDetector(
-          onTap: () => _showCategorySearchSheet(),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            decoration: BoxDecoration(
-              color: Theme.of(context).cardTheme.color,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                color: AppColors.primary.withAlpha(80),
-                width: 1.5,
-              ),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.search, size: 16, color: AppColors.primary),
-                const SizedBox(width: 6),
-                Text(
-                  '더보기',
-                  style: TextStyle(
-                    color: AppColors.primary,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  /// 카테고리 검색/선택 바텀시트
-  void _showCategorySearchSheet() {
-    String searchQuery = '';
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (sheetContext) {
-        return StatefulBuilder(
-          builder: (context, setSheetState) {
-            // 지출/수입에 따라 카테고리 목록 결정
-            final allCategories = _isIncome
-                ? Category.incomeCategories
-                : Category.expenseParentCategories;
-
-            // 검색 필터링
-            final filtered = searchQuery.isEmpty
-                ? allCategories
-                : allCategories
-                    .where((c) =>
-                        c.name.contains(searchQuery) ||
-                        c.emoji.contains(searchQuery))
-                    .toList();
-
-            return Container(
-              height: MediaQuery.of(context).size.height * 0.65,
-              decoration: BoxDecoration(
-                color: Theme.of(context).scaffoldBackgroundColor,
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-              ),
-              child: Column(
-                children: [
-                  // 핸들 바
-                  Container(
-                    margin: const EdgeInsets.only(top: 12),
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: Colors.grey.withAlpha(80),
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                  // 타이틀
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-                    child: Row(
-                      children: [
-                        Text(
-                          _isIncome ? '수입 카테고리' : '지출 카테고리',
-                          style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const Spacer(),
-                        IconButton(
-                          onPressed: () => Navigator.pop(context),
-                          icon: const Icon(Icons.close),
-                          style: IconButton.styleFrom(
-                            backgroundColor: Colors.grey.withAlpha(30),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  // 검색 바
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    child: TextField(
-                      autofocus: false,
-                      onChanged: (value) => setSheetState(() => searchQuery = value),
-                      decoration: InputDecoration(
-                        hintText: '카테고리 검색...',
-                        prefixIcon: const Icon(Icons.search, size: 20),
-                        isDense: true,
-                        filled: true,
-                        fillColor: Theme.of(context).cardTheme.color,
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide.none,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  // 카테고리 그리드
-                  Expanded(
-                    child: filtered.isEmpty
-                        ? Center(
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(Icons.search_off, size: 48, color: Colors.grey.withAlpha(100)),
-                                const SizedBox(height: 8),
-                                const Text('검색 결과가 없습니다', style: TextStyle(color: Colors.grey)),
-                              ],
-                            ),
-                          )
-                        : GridView.builder(
-                            padding: const EdgeInsets.symmetric(horizontal: 20),
-                            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                              crossAxisCount: 3,
-                              mainAxisSpacing: 10,
-                              crossAxisSpacing: 10,
-                              childAspectRatio: 2.4,
-                            ),
-                            itemCount: filtered.length,
-                            itemBuilder: (context, index) {
-                              final category = filtered[index];
-                              final isSelected = _selectedCategory == category.name;
-                              return GestureDetector(
-                                onTap: () {
-                                  setState(() => _selectedCategory = category.name);
-                                  Navigator.pop(context);
-                                },
-                                child: Container(
-                                  decoration: BoxDecoration(
-                                    color: isSelected
-                                        ? category.color.withAlpha(50)
-                                        : Theme.of(context).cardTheme.color,
-                                    borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(
-                                      color: isSelected ? category.color : Colors.grey.withAlpha(40),
-                                      width: isSelected ? 2 : 1,
-                                    ),
-                                  ),
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Text(category.emoji, style: const TextStyle(fontSize: 16)),
-                                      const SizedBox(width: 4),
-                                      Flexible(
-                                        child: Text(
-                                          category.name,
-                                          style: TextStyle(
-                                            fontSize: 13,
-                                            fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                                          ),
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
-                  ),
-                ],
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-
-  Widget _buildDebugRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 80,
-            child: Text(label, style: const TextStyle(fontSize: 12)),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
-            ),
-          ),
-        ],
       ),
     );
   }

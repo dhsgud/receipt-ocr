@@ -604,7 +604,7 @@ class _SpendingAnalysisViewState
                   LinearProgressIndicator(
                     value: percentage / 100,
                     backgroundColor: Colors.grey[200],
-                    valueColor: AlwaysStoppedAnimation(category.color),
+                    color: category.color,
                     minHeight: 6,
                     borderRadius: BorderRadius.circular(3),
                   ),

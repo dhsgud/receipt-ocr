@@ -170,9 +170,7 @@ class _BudgetManagementViewState
               LinearProgressIndicator(
                 value: (allocatedBudget / totalBudget).clamp(0.0, 1.0),
                 backgroundColor: Colors.grey[200],
-                valueColor: AlwaysStoppedAnimation<Color>(
-                  allocatedBudget > totalBudget ? Colors.red : AppColors.primary,
-                ),
+                color: allocatedBudget > totalBudget ? Colors.red : AppColors.primary,
                 minHeight: 8,
                 borderRadius: BorderRadius.circular(4),
               ),
@@ -308,9 +306,7 @@ class _BudgetManagementViewState
                 LinearProgressIndicator(
                   value: (spent / budget).clamp(0.0, 1.0),
                   backgroundColor: Colors.grey[200],
-                  valueColor: AlwaysStoppedAnimation<Color>(
-                    isOverBudget ? Colors.red : category.color,
-                  ),
+                  color: isOverBudget ? Colors.red : category.color,
                   minHeight: 4,
                   borderRadius: BorderRadius.circular(2),
                 ),

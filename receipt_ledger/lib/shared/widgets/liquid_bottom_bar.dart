@@ -2,8 +2,10 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/theme/app_theme.dart';
 
-class LiquidBottomBar extends ConsumerWidget {
+/// iOS 26-style Liquid Glass Bottom Navigation Bar
+class LiquidBottomBar extends ConsumerStatefulWidget {
   final int currentIndex;
   final Function(int) onTap;
 
@@ -14,57 +16,98 @@ class LiquidBottomBar extends ConsumerWidget {
   });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<LiquidBottomBar> createState() => _LiquidBottomBarState();
+}
+
+class _LiquidBottomBarState extends ConsumerState<LiquidBottomBar>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _indicatorController;
+  late Animation<double> _indicatorAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _indicatorController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 350),
+    );
+    _indicatorAnimation = CurvedAnimation(
+      parent: _indicatorController,
+      curve: Curves.easeOutCubic,
+    );
+  }
+
+  @override
+  void didUpdateWidget(LiquidBottomBar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.currentIndex != widget.currentIndex) {
+      _indicatorController.forward(from: 0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _indicatorController.dispose();
+    super.dispose();
+  }
+
+  void _handleTap(int index) {
+    HapticFeedback.lightImpact();
+    widget.onTap(index);
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    
-    // Liquid/Glass colors configuration
-    final backgroundColor = isDark 
-        ? Colors.black.withOpacity(0.3) 
-        : Colors.white.withOpacity(0.3);
-        
-    final borderColor = isDark 
-        ? Colors.white.withOpacity(0.1) 
-        : Colors.white.withOpacity(0.6);
 
     return Padding(
-      // Bottom padding handles safe area automatically if we don't wrap in SafeArea
-      // But since we want it floating *above* the bottom edge, we add some margin.
-      padding: const EdgeInsets.only(left: 24, right: 24, bottom: 32),
+      padding: const EdgeInsets.only(left: 20, right: 20, bottom: 28),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(40), // More rounded for "Pill" shape
+        borderRadius: BorderRadius.circular(28),
         child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20), // Strong blur
-          child: Container(
-            height: 72,
-            decoration: BoxDecoration(
-              color: backgroundColor,
-              borderRadius: BorderRadius.circular(40),
-              border: Border.all(
-                color: borderColor,
-                width: 1.0,
+          filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
+          child: AnimatedBuilder(
+            animation: _indicatorAnimation,
+            builder: (context, child) => Container(
+              height: 68,
+              decoration: BoxDecoration(
+                gradient: isDark
+                    ? AppColors.glassGradientDark
+                    : AppColors.glassGradientLight,
+                borderRadius: BorderRadius.circular(28),
+                border: Border.all(
+                  color: isDark
+                      ? Colors.white.withValues(alpha: 0.12)
+                      : Colors.white.withValues(alpha: 0.7),
+                  width: 0.5,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: isDark
+                        ? Colors.black.withValues(alpha: 0.3)
+                        : Colors.black.withValues(alpha: 0.08),
+                    blurRadius: 24,
+                    spreadRadius: -4,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
               ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
-                  blurRadius: 20,
-                  spreadRadius: 0,
-                  offset: const Offset(0, 10),
-                ),
-              ],
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                _buildLiquidItem(0, Icons.home_rounded, Icons.home_outlined, '홈', isDark),
-                _buildLiquidItem(1, Icons.calendar_month_rounded, Icons.calendar_today_outlined, '캘린더', isDark),
-                _LiquidReceiptButton(
-                  isSelected: currentIndex == 2,
-                  onTap: () => _handleTap(2),
-                  isDark: isDark,
-                ),
-                _buildLiquidItem(3, Icons.pie_chart_rounded, Icons.pie_chart_outline, '통계', isDark),
-                _buildLiquidItem(4, Icons.settings_rounded, Icons.settings_outlined, '설정', isDark),
-              ],
+              child: Row(
+                children: [
+                  _buildNavItem(0, Icons.home_rounded, Icons.home_outlined,
+                      '홈', isDark),
+                  _buildNavItem(1, Icons.calendar_month_rounded,
+                      Icons.calendar_today_outlined, '캘린더', isDark),
+                  _LiquidCenterButton(
+                    isSelected: widget.currentIndex == 2,
+                    onTap: () => _handleTap(2),
+                  ),
+                  _buildNavItem(3, Icons.pie_chart_rounded,
+                      Icons.pie_chart_outline, '통계', isDark),
+                  _buildNavItem(4, Icons.settings_rounded,
+                      Icons.settings_outlined, '설정', isDark),
+                ],
+              ),
             ),
           ),
         ),
@@ -72,72 +115,98 @@ class LiquidBottomBar extends ConsumerWidget {
     );
   }
 
-  void _handleTap(int index) {
-    HapticFeedback.lightImpact(); // Add haptic feedback for premium feel
-    onTap(index);
-  }
-
-  Widget _buildLiquidItem(
-    int index, 
-    IconData activeIcon, 
-    IconData inactiveIcon, 
-    String label, 
+  Widget _buildNavItem(
+    int index,
+    IconData activeIcon,
+    IconData inactiveIcon,
+    String label,
     bool isDark,
   ) {
-    final isSelected = currentIndex == index;
-    final activeColor = isDark ? Colors.white : Colors.black;
-    final inactiveColor = isDark ? Colors.white.withOpacity(0.5) : Colors.black.withOpacity(0.5);
-    final indicatorColor = isDark ? Colors.white.withOpacity(0.15) : Colors.black.withOpacity(0.08);
+    final isSelected = widget.currentIndex == index;
+    final activeColor = AppColors.primary;
+    final inactiveColor = isDark
+        ? Colors.white.withValues(alpha: 0.45)
+        : Colors.black.withValues(alpha: 0.4);
 
     return Expanded(
       child: GestureDetector(
         onTap: () => _handleTap(index),
         behavior: HitTestBehavior.opaque,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 400),
-              curve: Curves.easeOutBack, // Bouncy effect
-              width: isSelected ? 56 : 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: isSelected ? indicatorColor : Colors.transparent,
-                borderRadius: BorderRadius.circular(20),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOutCubic,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              // Indicator pill + icon
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 350),
+                curve: Curves.easeOutCubic,
+                padding:
+                    EdgeInsets.symmetric(horizontal: isSelected ? 14 : 8, vertical: 6),
+                decoration: BoxDecoration(
+                  color: isSelected
+                      ? AppColors.primary.withValues(alpha: isDark ? 0.18 : 0.12)
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 250),
+                  child: Icon(
+                    isSelected ? activeIcon : inactiveIcon,
+                    key: ValueKey(isSelected),
+                    color: isSelected ? activeColor : inactiveColor,
+                    size: 24,
+                  ),
+                ),
               ),
-              child: Icon(
-                isSelected ? activeIcon : inactiveIcon,
-                color: isSelected ? activeColor : inactiveColor,
-                size: 26,
+              // Label fade-in for selected
+              AnimatedSize(
+                duration: const Duration(milliseconds: 250),
+                curve: Curves.easeOutCubic,
+                child: AnimatedOpacity(
+                  duration: const Duration(milliseconds: 200),
+                  opacity: isSelected ? 1.0 : 0.0,
+                  child: isSelected
+                      ? Padding(
+                          padding: const EdgeInsets.only(top: 2),
+                          child: Text(
+                            label,
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                              color: activeColor,
+                              letterSpacing: 0.2,
+                            ),
+                          ),
+                        )
+                      : const SizedBox.shrink(),
+                ),
               ),
-            ),
-            // Optional: Tiny dot for unselected? Or text for selected?
-            // "Liquid" designs often minimalistic. 
-            // Let's add a very small scale animation for the label or just skip it for cleaner look.
-            // Skipping label for supreme "Ganji" (Style).
-          ],
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
-class _LiquidReceiptButton extends StatefulWidget {
+/// Special center receipt button with gradient glow
+class _LiquidCenterButton extends StatefulWidget {
   final bool isSelected;
   final VoidCallback onTap;
-  final bool isDark;
 
-  const _LiquidReceiptButton({
+  const _LiquidCenterButton({
     required this.isSelected,
     required this.onTap,
-    required this.isDark,
   });
 
   @override
-  State<_LiquidReceiptButton> createState() => _LiquidReceiptButtonState();
+  State<_LiquidCenterButton> createState() => _LiquidCenterButtonState();
 }
 
-class _LiquidReceiptButtonState extends State<_LiquidReceiptButton> with SingleTickerProviderStateMixin {
+class _LiquidCenterButtonState extends State<_LiquidCenterButton>
+    with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _scaleAnimation;
 
@@ -146,11 +215,11 @@ class _LiquidReceiptButtonState extends State<_LiquidReceiptButton> with SingleT
     super.initState();
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 200),
-      lowerBound: 0.0,
-      upperBound: 0.1,
+      duration: const Duration(milliseconds: 150),
     );
-    _scaleAnimation = Tween<double>(begin: 1.0, end: 0.9).animate(_controller);
+    _scaleAnimation = Tween<double>(begin: 1.0, end: 0.92).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+    );
   }
 
   @override
@@ -161,45 +230,39 @@ class _LiquidReceiptButtonState extends State<_LiquidReceiptButton> with SingleT
 
   @override
   Widget build(BuildContext context) {
-    // Special middle button
-    final primaryColor = Theme.of(context).primaryColor;
-    final iconColor = Colors.white; // Always white for contrast on primary
-
     return Expanded(
       child: GestureDetector(
         onTapDown: (_) => _controller.forward(),
         onTapUp: (_) {
           _controller.reverse();
+          HapticFeedback.mediumImpact();
           widget.onTap();
         },
         onTapCancel: () => _controller.reverse(),
         behavior: HitTestBehavior.opaque,
-        child: ScaleTransition(
-          scale: _scaleAnimation,
-          child: Container(
-            height: 52, // Slightly larger
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  primaryColor,
-                  primaryColor.withOpacity(0.8),
+        child: Center(
+          child: ScaleTransition(
+            scale: _scaleAnimation,
+            child: Container(
+              width: 50,
+              height: 50,
+              decoration: BoxDecoration(
+                gradient: AppColors.primaryGradient,
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.primary.withValues(alpha: 0.35),
+                    blurRadius: 14,
+                    spreadRadius: 0,
+                    offset: const Offset(0, 4),
+                  ),
                 ],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
               ),
-              shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                  color: primaryColor.withOpacity(0.4),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: Icon(
-              Icons.add_a_photo_rounded,
-              color: iconColor,
-              size: 28,
+              child: const Icon(
+                Icons.add_a_photo_rounded,
+                color: Colors.white,
+                size: 24,
+              ),
             ),
           ),
         ),
