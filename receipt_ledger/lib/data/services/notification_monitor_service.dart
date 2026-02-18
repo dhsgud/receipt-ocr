@@ -301,6 +301,12 @@ class NotificationMonitorService {
     return '기타';
   }
 
+  /// Get the user's sync key from SharedPreferences
+  Future<String> _getOwnerKey() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString('my_key') ?? 'local';
+  }
+
   /// Register payment info to ledger
   Future<void> _registerToLedger(PaymentInfo info) async {
     debugPrint('[NotificationMonitor] Registering to ledger: $info');
@@ -317,6 +323,9 @@ class NotificationMonitorService {
       return;
     }
     
+    // Get the actual user key for proper sync matching
+    final ownerKey = await _getOwnerKey();
+    
     // Create transaction
     final transaction = TransactionModel(
       id: const Uuid().v4(),
@@ -328,7 +337,7 @@ class NotificationMonitorService {
           : '자동 등록',
       storeName: info.storeName,
       isIncome: false,
-      ownerKey: 'local',
+      ownerKey: ownerKey,
       createdAt: DateTime.now(),
       updatedAt: DateTime.now(),
       isSynced: false,

@@ -109,13 +109,41 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     });
 
     if (mounted) {
+      Navigator.pop(context); // Close dialog first
+      
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('파트너 연결 완료!'),
+          content: Text('파트너 연결 완료! 데이터 동기화를 시작합니다...'),
           backgroundColor: AppColors.income,
         ),
       );
-      Navigator.pop(context);
+
+      // Auto-trigger full sync after partner pairing
+      setState(() {
+        _isSyncing = true;
+      });
+
+      final result = await syncService.fullSync();
+
+      setState(() {
+        _isSyncing = false;
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(result.success 
+                ? '동기화 완료! (업로드: ${result.uploaded}, 다운로드: ${result.downloaded})'
+                : '동기화 실패: ${result.message}'),
+            backgroundColor: result.success ? AppColors.income : AppColors.expense,
+          ),
+        );
+      }
+
+      // Refresh data after sync
+      ref.invalidate(transactionsProvider);
+      ref.invalidate(monthlyTransactionsProvider);
+      ref.invalidate(monthlyStatsProvider);
     }
   }
 

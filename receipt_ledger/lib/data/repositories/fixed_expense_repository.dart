@@ -81,6 +81,14 @@ class FixedExpenseRepository {
     }
   }
 
+  /// Reset sync status for all fixed expenses (for re-sync with new partner)
+  Future<void> resetAllSyncStatus() async {
+    final expenses = await _loadFixedExpenses();
+    final updated = expenses.map((e) => e.copyWith(isSynced: false)).toList();
+    await _saveFixedExpenses(updated);
+    debugPrint('All ${updated.length} fixed expenses marked as unsynced');
+  }
+
   /// Insert a fixed expense (used by sync to save downloaded data)
   Future<void> insertFixedExpense(FixedExpense expense) async {
     final expenses = await _loadFixedExpenses();

@@ -85,6 +85,14 @@ class BudgetRepository {
     }
   }
 
+  /// Reset sync status for all budgets (for re-sync with new partner)
+  Future<void> resetAllSyncStatus() async {
+    final budgets = await _loadBudgets();
+    final updated = budgets.map((b) => b.copyWith(isSynced: false)).toList();
+    await _saveBudgets(updated);
+    debugPrint('All ${updated.length} budgets marked as unsynced');
+  }
+
   /// Insert a budget (used by sync to save downloaded data)
   Future<void> insertBudget(Budget budget) async {
     final budgets = await _loadBudgets();

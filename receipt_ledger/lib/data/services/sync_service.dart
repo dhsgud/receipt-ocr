@@ -81,6 +81,9 @@ class SyncService {
     await _ensureInitialized();
     _partnerKey = key;
     await _prefs!.setString(_partnerKeyField, key);
+    // Clear last sync time to download ALL partner data on next sync
+    _lastSyncTime = null;
+    await _prefs!.remove(_lastSyncTimeField);
   }
 
   /// Clear partner information
@@ -221,6 +224,25 @@ class SyncService {
     } finally {
       _isSyncing = false;
     }
+  }
+
+  /// Reset sync status of all local data and perform full sync
+  /// Used when pairing with a new partner to share all existing data
+  Future<SyncResult> fullSync() async {
+    // Reset all local data to unsynced
+    await _repository.resetAllSyncStatus();
+    await _budgetRepository.resetAllSyncStatus();
+    await _fixedExpenseRepository.resetAllSyncStatus();
+
+    // Clear last sync time to download ALL data from server
+    await _ensureInitialized();
+    _lastSyncTime = null;
+    await _prefs!.remove(_lastSyncTimeField);
+
+    debugPrint('Full sync: reset all sync status and cleared last sync time');
+
+    // Run normal sync (all data will be uploaded + all partner data downloaded)
+    return syncWithServer();
   }
 
   /// Pull all transactions from server (full refresh)

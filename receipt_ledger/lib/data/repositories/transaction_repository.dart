@@ -161,6 +161,14 @@ class TransactionRepository {
         .fold<double>(0.0, (double sum, t) => sum + t.amount);
   }
 
+  /// Reset sync status for all transactions (for re-sync with new partner)
+  Future<void> resetAllSyncStatus() async {
+    final transactions = await _loadTransactions();
+    final updated = transactions.map((t) => t.copyWith(isSynced: false)).toList();
+    await _saveTransactions(updated);
+    debugPrint('All ${updated.length} transactions marked as unsynced');
+  }
+
   /// Normalize store name for comparison
   /// Removes whitespace, special characters, and converts to lowercase
   String _normalizeStoreName(String name) {
