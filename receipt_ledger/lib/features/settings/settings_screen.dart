@@ -562,7 +562,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   width: double.infinity,
                   height: 50,
                   child: ElevatedButton.icon(
-                    onPressed: _isServerConnected && !_isSyncing && _partnerKey != null
+                    onPressed: _isServerConnected && !_isSyncing
                         ? _syncNow
                         : null,
                     icon: _isSyncing 
@@ -578,7 +578,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     label: Text(
                       _isSyncing
                           ? '동기화 중...'
-                          : (_partnerKey == null ? '파트너 연결 필요' : '지금 동기화'),
+                          : '지금 동기화',
                       style: const TextStyle(
                         fontWeight: FontWeight.bold,
                         color: Colors.white,
@@ -871,6 +871,41 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   ),
                 ),
                 const SizedBox(height: 12),
+                // Data Restore
+                StyledCard(
+                  onTap: _showRestoreKeyDialog,
+                  child: const Row(
+                    children: [
+                      Icon(Icons.restore, color: AppColors.primary),
+                      SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '데이터 복원',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            SizedBox(height: 2),
+                            Text(
+                              '이전 키를 입력하여 서버에서 데이터 복원',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Icon(Icons.chevron_right, color: Colors.grey),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                // Data Reset
                 StyledCard(
                   onTap: () => _showResetDataDialog(),
                   child: const Row(
@@ -1233,6 +1268,133 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         const SnackBar(content: Text('알림 모니터링이 비활성화되었습니다')),
       );
     }
+  }
+
+  void _showRestoreKeyDialog() {
+    final keyController = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.restore, color: AppColors.primary),
+            SizedBox(width: 8),
+            Text('데이터 복원'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              '앱 재설치 전에 복사해둔 동기화 키를 입력하면\n서버에서 이전 데이터를 복원합니다.',
+              style: TextStyle(fontSize: 14, color: Colors.grey),
+            ),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.orange.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.orange.withOpacity(0.3)),
+              ),
+              child: const Row(
+                children: [
+                  Icon(Icons.info_outline, color: Colors.orange, size: 18),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      '현재 내 키는 설정 > 파트너 공유 > 내 공유 키에서 미리 복사해두세요',
+                      style: TextStyle(fontSize: 11, color: Colors.orange),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: keyController,
+              maxLines: 2,
+              decoration: InputDecoration(
+                labelText: '이전 동기화 키',
+                hintText: 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                prefixIcon: const Icon(Icons.key),
+              ),
+              style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('취소'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final oldKey = keyController.text.trim();
+              if (oldKey.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('키를 입력해주세요')),
+                );
+                return;
+              }
+
+              Navigator.pop(context);
+
+              // Show progress
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('🔄 데이터 복원 중...'),
+                    backgroundColor: Colors.blueGrey,
+                    duration: Duration(seconds: 10),
+                  ),
+                );
+              }
+
+              setState(() { _isSyncing = true; });
+
+              final syncService = ref.read(syncServiceProvider);
+              await syncService.initialize();
+              final result = await syncService.restoreMyKey(oldKey);
+
+              setState(() {
+                _isSyncing = false;
+                _myKey = syncService.myKey;
+                _myQrData = syncService.generateQrData();
+              });
+
+              if (mounted) {
+                ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(result.success
+                        ? '✅ 데이터 복원 완료! (다운로드: ${result.downloaded}개)'
+                        : '❌ 복원 실패: ${result.message}'),
+                    backgroundColor: result.success ? AppColors.income : AppColors.expense,
+                    duration: const Duration(seconds: 3),
+                  ),
+                );
+              }
+
+              if (result.success) {
+                ref.invalidate(transactionsProvider);
+                ref.invalidate(selectedDateTransactionsProvider);
+                ref.invalidate(monthlyTransactionsProvider);
+                ref.invalidate(monthlyStatsProvider);
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+            ),
+            child: const Text('복원', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _showResetDataDialog() async {

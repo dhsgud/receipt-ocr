@@ -150,11 +150,11 @@ class SyncService {
       return SyncResult(success: false, message: '이미 동기화 중입니다');
     }
 
-    // Partner connection required for sync
-    if (!isPaired) {
+    // myKey가 없으면 동기화 불가
+    if (_myKey == null || _myKey!.isEmpty) {
       return SyncResult(
         success: false,
-        message: '파트너 연결이 필요합니다. 설정에서 파트너를 추가해주세요.',
+        message: '동기화 키가 없습니다. 앱을 다시 시작해주세요.',
       );
     }
 
@@ -333,6 +333,25 @@ class SyncService {
       debugPrint('Error parsing QR data: $e');
       return null;
     }
+  }
+
+  /// Restore my key from a previously backed-up key
+  /// This replaces the current key and downloads all data from the server
+  Future<SyncResult> restoreMyKey(String oldKey) async {
+    await _ensureInitialized();
+    
+    // Replace current key with old key
+    _myKey = oldKey;
+    await _prefs!.setString(_myKeyField, oldKey);
+    
+    // Clear last sync time to download ALL data
+    _lastSyncTime = null;
+    await _prefs!.remove(_lastSyncTimeField);
+    
+    debugPrint('Key restored to: $oldKey');
+    
+    // Perform sync to download all data with the restored key
+    return syncWithServer();
   }
 
   String _getDioErrorMessage(DioException e) {

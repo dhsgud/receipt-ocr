@@ -119,18 +119,21 @@ class _MainNavigationScreenState extends ConsumerState<MainNavigationScreen> {
 
   Future<void> _performAutoSync() async {
     if (_isSyncing) return;
-    
-    // 구독자만 동기화 가능
-    final subscription = ref.read(subscriptionProvider);
-    if (!subscription.canSync) {
-      debugPrint('[App] Sync disabled for free users');
-      ref.read(syncStatusProvider.notifier).state = SyncStatus.disconnected;
-      return;
-    }
 
     setState(() {
       _isSyncing = true;
     });
+
+    // "자동 동기화 시작합니다" 스낵바 표시
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('🔄 자동 동기화 시작합니다'),
+          backgroundColor: Colors.blueGrey,
+          duration: Duration(seconds: 2),
+        ),
+      );
+    }
 
     try {
       final syncService = ref.read(syncServiceProvider);
@@ -158,7 +161,7 @@ class _MainNavigationScreenState extends ConsumerState<MainNavigationScreen> {
           if (mounted && (result.uploaded > 0 || result.downloaded > 0)) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text('동기화 완료: ↑${result.uploaded} ↓${result.downloaded}'),
+                content: Text('✅ 동기화 완료: ↑${result.uploaded} ↓${result.downloaded}'),
                 backgroundColor: AppColors.income,
                 duration: const Duration(seconds: 2),
               ),
