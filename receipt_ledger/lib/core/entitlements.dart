@@ -60,7 +60,7 @@ enum SubscriptionTier {
 
 class QuotaConfig {
   // Free 등급
-  static const int freeTotalLimit = 999999; // 테스트용 무제한 (원래 5)
+  static const int freeTotalLimit = 5; // 테스트용 무제한 (원래 5)
   static const int freeBatchLimit = 3;
   
   // Basic/Pro 등급 (무제한)
