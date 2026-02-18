@@ -41,6 +41,8 @@ class TransactionListItem extends StatelessWidget {
   final String subtitle;
   final String amount;
   final bool isIncome;
+  final String? ownerLabel;
+  final bool isMyTransaction;
   final VoidCallback? onTap;
   final VoidCallback? onLongPress;
 
@@ -51,6 +53,8 @@ class TransactionListItem extends StatelessWidget {
     required this.subtitle,
     required this.amount,
     this.isIncome = false,
+    this.ownerLabel,
+    this.isMyTransaction = true,
     this.onTap,
     this.onLongPress,
   });
@@ -81,12 +85,44 @@ class TransactionListItem extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w500,
-                    ),
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          title,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      if (ownerLabel != null && ownerLabel!.isNotEmpty) ...[
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: isMyTransaction
+                                ? AppColors.primary.withOpacity(0.15)
+                                : Colors.orange.withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            ownerLabel!,
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                              color: isMyTransaction
+                                  ? AppColors.primary
+                                  : Colors.orange,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                   const SizedBox(height: 2),
                   Text(

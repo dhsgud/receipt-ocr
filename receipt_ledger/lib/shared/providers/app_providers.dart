@@ -6,6 +6,12 @@ import '../../data/services/sllm_service.dart';
 import '../../data/services/sync_service.dart';
 import '../../data/models/transaction.dart';
 
+/// 통계 소유자 필터
+enum StatsOwnerFilter {
+  all,  // 전체 (나 + 파트너)
+  mine, // 개인 (나만)
+}
+
 /// Transaction repository provider
 final transactionRepositoryProvider = Provider<TransactionRepository>((ref) {
   return TransactionRepository();
@@ -67,23 +73,42 @@ final monthlyTransactionsProvider = FutureProvider<List<TransactionModel>>((ref)
   );
 });
 
-/// Monthly statistics
+/// 통계 소유자 필터 Provider
+final statsOwnerFilterProvider = StateProvider<StatsOwnerFilter>((ref) {
+  return StatsOwnerFilter.all;
+});
+
+/// Monthly statistics (with owner filter)
 final monthlyStatsProvider = FutureProvider<MonthlyStats>((ref) async {
   final repository = ref.watch(transactionRepositoryProvider);
   final currentMonth = ref.watch(currentMonthProvider);
+  final ownerFilter = ref.watch(statsOwnerFilterProvider);
+  final syncService = ref.watch(syncServiceProvider);
   
-  final income = await repository.getMonthlyIncome(
+  // Get all transactions for the month
+  final allTransactions = await repository.getTransactionsByMonth(
     currentMonth.year,
     currentMonth.month,
   );
-  final expense = await repository.getMonthlyExpense(
-    currentMonth.year,
-    currentMonth.month,
-  );
-  final categoryTotals = await repository.getMonthlyCategoryTotals(
-    currentMonth.year,
-    currentMonth.month,
-  );
+  
+  // Apply owner filter
+  final transactions = ownerFilter == StatsOwnerFilter.mine && syncService.myKey != null
+      ? allTransactions.where((t) => t.ownerKey == syncService.myKey).toList()
+      : allTransactions;
+  
+  final income = transactions
+      .where((t) => t.isIncome)
+      .fold<double>(0.0, (sum, t) => sum + t.amount);
+  final expense = transactions
+      .where((t) => !t.isIncome)
+      .fold<double>(0.0, (sum, t) => sum + t.amount);
+  
+  final categoryTotals = <String, double>{};
+  for (final t in transactions) {
+    if (!t.isIncome) {
+      categoryTotals[t.category] = (categoryTotals[t.category] ?? 0) + t.amount;
+    }
+  }
   
   return MonthlyStats(
     income: income,
@@ -124,6 +149,12 @@ enum SyncStatus {
   syncing,
   error,
 }
+
+/// 내 닉네임 Provider
+final myNicknameProvider = StateProvider<String>((ref) => '');
+
+/// 파트너 닉네임 Provider
+final partnerNicknameProvider = StateProvider<String>((ref) => '');
 
 /// OCR 서버 URL (Gemini 전용)
 final ocrServerUrlProvider = StateProvider<String>((ref) {

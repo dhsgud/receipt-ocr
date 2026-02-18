@@ -196,6 +196,9 @@ class _AllTransactionsScreenState
                                     grouped[dateKeys[i]]![index];
                                 final category = Category.findByName(
                                     transaction.category);
+                                final syncService = ref.read(syncServiceProvider);
+                                final ownerName = syncService.getOwnerName(transaction.ownerKey);
+                                final isMine = syncService.isMyTransaction(transaction.ownerKey);
 
                                 return TransactionListItem(
                                   emoji: category.emoji,
@@ -205,6 +208,8 @@ class _AllTransactionsScreenState
                                   amount: Formatters.currency(
                                       transaction.amount),
                                   isIncome: transaction.isIncome,
+                                  ownerLabel: syncService.isPaired ? ownerName : null,
+                                  isMyTransaction: isMine,
                                   onTap: () {
                                     _showTransactionDetails(
                                         context, transaction);
@@ -526,6 +531,12 @@ class _AllTransactionsScreenState
                 _buildDetailRow('상점명', transaction.storeName!),
               _buildDetailRow(
                   '유형', transaction.isIncome ? '수입' : '지출'),
+              Builder(
+                builder: (_) {
+                  final syncService = ref.read(syncServiceProvider);
+                  return _buildDetailRow('등록자', syncService.getOwnerName(transaction.ownerKey));
+                },
+              ),
               _buildDetailRow(
                   '동기화', transaction.isSynced ? '완료' : '대기중'),
               _buildDetailRow(

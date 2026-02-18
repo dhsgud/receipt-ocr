@@ -3,9 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:qr_flutter/qr_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/theme/app_theme.dart';
 import '../../shared/providers/app_providers.dart';
 import '../../shared/widgets/common_widgets.dart';
+import '../../shared/widgets/sync_tutorial_overlay.dart';
 import '../../data/services/notification_monitor_service.dart';
 import 'calendar_settings_screen.dart';
 import 'subscription_screen.dart';
@@ -13,7 +15,6 @@ import 'subscription_screen.dart';
 import 'category_management_screen.dart';
 import 'category_dashboard_screen.dart';
 import '../../data/services/purchase_service.dart';
-import '../../data/services/quota_service.dart';
 import '../../data/services/quota_service.dart';
 import '../../core/entitlements.dart';
 
@@ -31,7 +32,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   String? _partnerKey;
   bool _isServerConnected = false;
   bool _isSyncing = false;
+  String _myNickname = '';
+  String _partnerNickname = '';
+  bool _showSyncTutorial = false;
   final _partnerKeyController = TextEditingController();
+  final _partnerNicknameController = TextEditingController();
 
   @override
   void initState() {
@@ -42,6 +47,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   @override
   void dispose() {
     _partnerKeyController.dispose();
+    _partnerNicknameController.dispose();
     super.dispose();
   }
 
@@ -60,7 +66,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           _myKey = syncService.myKey;
           _partnerKey = syncService.partnerKey;
           _isServerConnected = isConnected;
+          _myNickname = syncService.myNickname;
+          _partnerNickname = syncService.partnerNickname;
         });
+        // Check tutorial status
+        final prefs = await SharedPreferences.getInstance();
+        if (mounted) {
+          setState(() {
+            _showSyncTutorial = !(prefs.getBool('sync_tutorial_completed') ?? false);
+          });
+        }
       }
     } catch (e) {
       debugPrint('Error initializing sync: $e');
@@ -72,6 +87,79 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         });
       }
     }
+  }
+
+  void _showNicknameDialog() {
+    final controller = TextEditingController(text: _myNickname);
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('내 닉네임 설정'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              '파트너에게 보여질 내 이름표를 설정하세요',
+              style: TextStyle(fontSize: 14, color: Colors.grey),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: controller,
+              maxLength: 10,
+              decoration: InputDecoration(
+                labelText: '닉네임',
+                hintText: '예: 동한, 지수',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                prefixIcon: const Icon(Icons.badge_outlined),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('취소'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final nickname = controller.text.trim();
+              if (nickname.isNotEmpty) {
+                final syncService = ref.read(syncServiceProvider);
+                await syncService.setMyNickname(nickname);
+                setState(() {
+                  _myNickname = nickname;
+                  _myQrData = syncService.generateQrData();
+                });
+                ref.read(myNicknameProvider.notifier).state = nickname;
+                if (context.mounted) {
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('닉네임이 설정되었습니다'),
+                      backgroundColor: AppColors.income,
+                    ),
+                  );
+                }
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+            ),
+            child: const Text('저장', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _dismissSyncTutorial() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('sync_tutorial_completed', true);
+    setState(() {
+      _showSyncTutorial = false;
+    });
   }
 
   Future<void> _testServerConnection() async {
@@ -104,8 +192,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final syncService = ref.read(syncServiceProvider);
     await syncService.setPartnerKey(key);
     
+    // Save partner nickname if provided
+    final partnerNickname = _partnerNicknameController.text.trim();
+    if (partnerNickname.isNotEmpty) {
+      await syncService.setPartnerNickname(partnerNickname);
+      ref.read(partnerNicknameProvider.notifier).state = partnerNickname;
+    }
+    
     setState(() {
       _partnerKey = key;
+      _partnerNickname = partnerNickname;
     });
 
     if (mounted) {
@@ -386,6 +482,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 ),
                 const SizedBox(height: 12),
 
+                // Sync Tutorial Banner
+                if (_showSyncTutorial)
+                  SyncTutorialBanner(
+                    onDismiss: _dismissSyncTutorial,
+                    onSetNickname: _showNicknameDialog,
+                    onShowQr: _showMyQrDialog,
+                    onSync: _syncNow,
+                  ),
+
                 // Server Connection Status
                 StyledCard(
                   onTap: _testServerConnection,
@@ -498,6 +603,43 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
                     color: Colors.grey,
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                // My Nickname
+                StyledCard(
+                  onTap: _showNicknameDialog,
+                  child: Row(
+                    children: [
+                      const Icon(Icons.badge_outlined, color: AppColors.primary),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              '내 닉네임',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              _myNickname.isNotEmpty ? _myNickname : '탭하여 설정',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: _myNickname.isNotEmpty
+                                    ? AppColors.income
+                                    : Colors.grey,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Icon(Icons.chevron_right, color: Colors.grey),
+                    ],
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -617,7 +759,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                             if (_partnerKey != null) ...[
                               const SizedBox(height: 2),
                               Text(
-                                '연결됨: ${_partnerKey!.substring(0, 8)}...',
+                                '연결됨: ${_partnerNickname.isNotEmpty ? _partnerNickname : _partnerKey!.substring(0, 8)}...',
                                 style: const TextStyle(
                                   fontSize: 12,
                                   color: AppColors.income,
@@ -882,6 +1024,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   void _showAddPartnerDialog() {
+    _partnerNicknameController.clear();
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -890,7 +1033,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             const Text(
-              '파트너의 공유 키를 입력하세요',
+              '파트너의 공유 키와 닉네임을 입력하세요',
               style: TextStyle(fontSize: 14, color: Colors.grey),
             ),
             const SizedBox(height: 16),
@@ -902,6 +1045,19 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _partnerNicknameController,
+              maxLength: 10,
+              decoration: InputDecoration(
+                labelText: '파트너 닉네임 (선택)',
+                hintText: '예: 지수, 영희',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                prefixIcon: const Icon(Icons.badge_outlined),
               ),
             ),
           ],

@@ -18,6 +18,8 @@ class SyncService {
   static const String _myKeyField = 'my_key';
   static const String _partnerKeyField = 'partner_key';
   static const String _lastSyncTimeField = 'last_sync_time';
+  static const String _myNicknameField = 'my_nickname';
+  static const String _partnerNicknameField = 'partner_nickname';
 
   final TransactionRepository _repository;
   final BudgetRepository _budgetRepository;
@@ -29,6 +31,8 @@ class SyncService {
   String? _myKey;
   String? _partnerKey;
   String? _lastSyncTime;
+  String _myNickname = '';
+  String _partnerNickname = '';
   bool _isSyncing = false;
 
   SyncService(this._repository, this._budgetRepository, this._fixedExpenseRepository) : 
@@ -54,6 +58,8 @@ class SyncService {
     _myKey = _prefs!.getString(_myKeyField);
     _partnerKey = _prefs!.getString(_partnerKeyField);
     _lastSyncTime = _prefs!.getString(_lastSyncTimeField);
+    _myNickname = _prefs!.getString(_myNicknameField) ?? '';
+    _partnerNickname = _prefs!.getString(_partnerNicknameField) ?? '';
 
     // Generate key if not exists
     if (_myKey == null) {
@@ -75,6 +81,40 @@ class SyncService {
   
   /// Is currently syncing
   bool get isSyncing => _isSyncing;
+
+  /// Get my nickname
+  String get myNickname => _myNickname;
+
+  /// Get partner's nickname
+  String get partnerNickname => _partnerNickname;
+
+  /// Set my nickname
+  Future<void> setMyNickname(String nickname) async {
+    await _ensureInitialized();
+    _myNickname = nickname.trim();
+    await _prefs!.setString(_myNicknameField, _myNickname);
+  }
+
+  /// Set partner's nickname
+  Future<void> setPartnerNickname(String nickname) async {
+    await _ensureInitialized();
+    _partnerNickname = nickname.trim();
+    await _prefs!.setString(_partnerNicknameField, _partnerNickname);
+  }
+
+  /// Get display name for a given ownerKey
+  /// Returns nickname if available, otherwise truncated key
+  String getOwnerName(String ownerKey) {
+    if (ownerKey == _myKey) {
+      return _myNickname.isNotEmpty ? _myNickname : '나';
+    } else if (ownerKey == _partnerKey) {
+      return _partnerNickname.isNotEmpty ? _partnerNickname : '파트너';
+    }
+    return '알 수 없음';
+  }
+
+  /// Check if a transaction belongs to me
+  bool isMyTransaction(String ownerKey) => ownerKey == _myKey;
 
   /// Set partner's key
   Future<void> setPartnerKey(String key) async {
@@ -273,16 +313,22 @@ class SyncService {
     }
   }
 
-  /// Generate QR code data for pairing
+  /// Generate QR code data for pairing (includes nickname)
   String generateQrData() {
-    return jsonEncode({'key': _myKey});
+    return jsonEncode({
+      'key': _myKey,
+      'nickname': _myNickname,
+    });
   }
 
-  /// Parse QR code data from partner
+  /// Parse QR code data from partner (includes nickname)
   Map<String, String>? parseQrData(String data) {
     try {
       final json = jsonDecode(data) as Map<String, dynamic>;
-      return {'key': json['key'] as String};
+      return {
+        'key': json['key'] as String,
+        'nickname': (json['nickname'] as String?) ?? '',
+      };
     } catch (e) {
       debugPrint('Error parsing QR data: $e');
       return null;
