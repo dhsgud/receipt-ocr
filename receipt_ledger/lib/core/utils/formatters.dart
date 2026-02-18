@@ -5,7 +5,23 @@ class Formatters {
   /// Format currency with Korean Won symbol
   static String currency(double amount) {
     final formatter = NumberFormat('#,###');
-    return '₩${formatter.format(amount.abs().round())}';
+    return '${formatter.format(amount.abs().round())}원';
+  }
+
+  /// Format currency in compact form (e.g. 1.2만)
+  static String compactCurrency(double amount) {
+    if (amount == 0) return '0';
+    
+    final absAmount = amount.abs();
+    if (absAmount >= 100000000) {
+      final result = absAmount / 100000000;
+      return '${result.toStringAsFixed(result.truncateToDouble() == result ? 0 : 1)}억';
+    } else if (absAmount >= 10000) {
+      final result = absAmount / 10000;
+      return '${result.toStringAsFixed(result.truncateToDouble() == result ? 0 : 1)}만';
+    } else {
+      return NumberFormat('#,###').format(absAmount.round());
+    }
   }
   
   /// Format date as yyyy-MM-dd

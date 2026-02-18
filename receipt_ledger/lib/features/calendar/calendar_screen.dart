@@ -99,6 +99,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
               lastDay: DateTime.utc(2030, 12, 31),
               focusedDay: _focusedDay,
               calendarFormat: _calendarFormat,
+              rowHeight: 70, // Increased height for text markers
               selectedDayPredicate: (day) => isSameDay(selectedDate, day),
               onDaySelected: (selectedDay, focusedDay) {
                 ref.read(selectedDateProvider.notifier).state = selectedDay;
@@ -188,15 +189,15 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                   }
 
                   return Positioned(
-                    bottom: 2,
-                    child: Row(
+                    bottom: 4,
+                    child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         if (income != null && income > 0)
-                          _buildMarkerDot(context, AppColors.income),
+                          _buildAmountMarker(context, income, AppColors.income),
                         if (expense != null && expense > 0) ...[
-                          if (income != null && income > 0) const SizedBox(width: 2),
-                          _buildMarkerDot(context, AppColors.expense),
+                          if (income != null && income > 0) const SizedBox(height: 2),
+                          _buildAmountMarker(context, expense, AppColors.expense),
                         ],
                       ],
                     ),
@@ -343,20 +344,19 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     );
   }
 
-  Widget _buildMarkerDot(BuildContext context, Color color) {
+  Widget _buildAmountMarker(BuildContext context, double amount, Color color) {
     return Container(
-      width: 6,
-      height: 6,
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
       decoration: BoxDecoration(
-        color: color,
-        shape: BoxShape.circle,
-        boxShadow: [
-          BoxShadow(
-            color: color.withValues(alpha: 0.5),
-            blurRadius: 2,
-            offset: const Offset(0, 1),
-          ),
-        ],
+        color: Colors.transparent,
+      ),
+      child: Text(
+        Formatters.compactCurrency(amount),
+        style: TextStyle(
+          color: color,
+          fontSize: 10,
+          fontWeight: FontWeight.bold,
+        ),
       ),
     );
   }
