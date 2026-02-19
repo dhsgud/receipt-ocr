@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/constants/app_constants.dart';
 import '../../data/repositories/transaction_repository.dart';
 import '../../data/repositories/budget_repository.dart';
 import '../../data/repositories/fixed_expense_repository.dart';
@@ -158,7 +159,7 @@ final partnerNicknameProvider = StateProvider<String>((ref) => '');
 
 /// OCR 서버 URL (Gemini 전용)
 final ocrServerUrlProvider = StateProvider<String>((ref) {
-  return 'http://183.96.3.137:9999';
+  return AppConstants.syncServerUrl;
 });
 
 /// OCR 제공자 (Gemini 전용)

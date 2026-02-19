@@ -14,7 +14,7 @@ from PIL import Image
 import io
 
 # ============== 설정 ==============
-VISION_SERVER_URL = "http://183.96.3.137:408/v1/chat/completions"
+VISION_SERVER_URL = os.environ.get("VISION_SERVER_URL", "http://localhost:408/v1/chat/completions")
 VISION_MODEL_NAME = "user-model"
 REQUEST_TIMEOUT = 300
 

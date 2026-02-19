@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Optional, List, Dict, Any
 from contextlib import contextmanager
 from dotenv import load_dotenv
+import os
 
 load_dotenv() # Load environment variables
 
@@ -38,10 +39,13 @@ app = FastAPI(
     version="2.2.0"
 )
 
-# CORS 설정
+# CORS 설정 (환경변수에서 읽기, 기본값: "*")
+_cors_origins_raw = os.environ.get("CORS_ORIGINS", "*")
+_cors_origins = [o.strip() for o in _cors_origins_raw.split(",")] if _cors_origins_raw != "*" else ["*"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -699,5 +703,6 @@ async def startup_event():
 
 if __name__ == "__main__":
     import uvicorn
-    import json
-    uvicorn.run(app, host="0.0.0.0", port=9999)
+    server_host = os.environ.get("SERVER_HOST", "0.0.0.0")
+    server_port = int(os.environ.get("SERVER_PORT", "9999"))
+    uvicorn.run(app, host=server_host, port=server_port)

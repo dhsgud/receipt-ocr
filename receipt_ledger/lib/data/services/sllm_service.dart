@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
+import '../../core/constants/app_constants.dart';
 import '../models/receipt.dart';
 
 /// Gemini OCR 서버를 통한 영수증 분석 서비스
@@ -25,7 +26,7 @@ class SllmService {
     try {
       return await _parseWithOcrServer(
         imageBytes, 
-        ocrServerUrl ?? 'http://183.96.3.137:9999',
+        ocrServerUrl ?? AppConstants.syncServerUrl,
         provider: provider,
         cancelToken: cancelToken,
       );
