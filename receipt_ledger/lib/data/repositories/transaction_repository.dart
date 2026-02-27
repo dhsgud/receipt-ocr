@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/transaction.dart';
 
@@ -27,7 +26,6 @@ class TransactionRepository {
           .map((json) => TransactionModel.fromMap(json as Map<String, dynamic>))
           .toList();
     } catch (e) {
-      debugPrint('Error loading transactions: $e');
       return [];
     }
   }
@@ -46,7 +44,6 @@ class TransactionRepository {
     transactions.removeWhere((t) => t.id == transaction.id);
     transactions.add(transaction);
     await _saveTransactions(transactions);
-    debugPrint('Transaction saved: ${transaction.description}');
   }
 
   /// Update an existing transaction
@@ -70,7 +67,6 @@ class TransactionRepository {
   Future<void> clearAllTransactions() async {
     await _ensureInitialized();
     await _prefs!.remove(_storageKey);
-    debugPrint('All transactions cleared');
   }
 
   /// Get all transactions
@@ -166,7 +162,6 @@ class TransactionRepository {
     final transactions = await _loadTransactions();
     final updated = transactions.map((t) => t.copyWith(isSynced: false)).toList();
     await _saveTransactions(updated);
-    debugPrint('All ${updated.length} transactions marked as unsynced');
   }
 
   /// Normalize store name for comparison

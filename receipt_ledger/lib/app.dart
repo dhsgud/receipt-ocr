@@ -3,9 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/theme/app_theme.dart';
 import 'shared/providers/app_providers.dart';
-import 'data/repositories/transaction_repository.dart';
 import 'data/services/notification_monitor_service.dart';
-import 'data/services/purchase_service.dart';
 import 'data/services/quota_service.dart';
 import 'data/services/ad_service.dart';
 import 'features/home/home_screen.dart';
@@ -14,6 +12,7 @@ import 'features/receipt/receipt_screen.dart';
 import 'features/statistics/statistics_screen.dart';
 import 'features/settings/settings_screen.dart';
 import 'shared/widgets/liquid_bottom_bar.dart';
+import 'shared/widgets/banner_ad_widget.dart';
 
 
 class ReceiptLedgerApp extends ConsumerWidget {
@@ -65,9 +64,8 @@ class _MainNavigationScreenState extends ConsumerState<MainNavigationScreen> {
     });
   }
   
-  /// Initialize subscription service (RevenueCat)
+  /// Initialize services (AdMob + Quota)
   Future<void> _initSubscription() async {
-    await ref.read(subscriptionProvider.notifier).init();
     await ref.read(quotaProvider.notifier).init();
     // AdMob 초기화
     await ref.read(adProvider.notifier).init();
@@ -112,7 +110,6 @@ class _MainNavigationScreenState extends ConsumerState<MainNavigationScreen> {
       if (hasPermission) {
         await _notificationService!.startMonitoring();
         ref.read(notificationMonitorEnabledProvider.notifier).state = true;
-        debugPrint('[App] Notification monitoring started');
       }
     }
   }
@@ -175,7 +172,6 @@ class _MainNavigationScreenState extends ConsumerState<MainNavigationScreen> {
       }
     } catch (e) {
       ref.read(syncStatusProvider.notifier).state = SyncStatus.error;
-      debugPrint('Auto-sync error: $e');
     } finally {
       if (mounted) {
         setState(() {
@@ -189,9 +185,17 @@ class _MainNavigationScreenState extends ConsumerState<MainNavigationScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       extendBody: true, // Important for glass effect
-      body: IndexedStack(
-        index: _currentIndex,
-        children: _screens,
+      body: Column(
+        children: [
+          Expanded(
+            child: IndexedStack(
+              index: _currentIndex,
+              children: _screens,
+            ),
+          ),
+          // 배너 광고 (항상 표시)
+          const BottomBannerAd(),
+        ],
       ),
       bottomNavigationBar: LiquidBottomBar(
         currentIndex: _currentIndex,

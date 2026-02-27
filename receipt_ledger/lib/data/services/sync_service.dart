@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:dio/dio.dart';
-import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 import '../../core/constants/app_constants.dart';
@@ -66,8 +65,6 @@ class SyncService {
       _myKey = const Uuid().v4();
       await _prefs!.setString(_myKeyField, _myKey!);
     }
-    
-    debugPrint('SyncService initialized with key: $_myKey');
   }
 
   /// Get my unique key
@@ -139,7 +136,6 @@ class SyncService {
       final response = await _dio.get('/health');
       return response.statusCode == 200;
     } catch (e) {
-      debugPrint('Sync server connection failed: $e');
       return false;
     }
   }
@@ -174,9 +170,7 @@ class SyncService {
         'lastSyncTime': _lastSyncTime,
       };
 
-      debugPrint('Syncing ${unsyncedTransactions.length} transactions, '
-          '${unsyncedBudgets.length} budgets, '
-          '${unsyncedFixedExpenses.length} fixed expenses...');
+
 
       // Note: Images are stored locally only, not synced to server
 
@@ -240,7 +234,7 @@ class SyncService {
 
         final totalUploaded = unsyncedTransactions.length + unsyncedBudgets.length + unsyncedFixedExpenses.length;
         final totalDownloaded = downloaded.length + downloadedBudgets.length + downloadedFixedExpenses.length;
-        debugPrint('Sync complete: uploaded $totalUploaded, downloaded $totalDownloaded');
+
         
         return SyncResult(
           success: true,
@@ -256,10 +250,8 @@ class SyncService {
       }
     } on DioException catch (e) {
       final message = _getDioErrorMessage(e);
-      debugPrint('Sync failed: $message');
       return SyncResult(success: false, message: message);
     } catch (e) {
-      debugPrint('Sync error: $e');
       return SyncResult(success: false, message: '동기화 실패: $e');
     } finally {
       _isSyncing = false;
@@ -278,8 +270,6 @@ class SyncService {
     await _ensureInitialized();
     _lastSyncTime = null;
     await _prefs!.remove(_lastSyncTimeField);
-
-    debugPrint('Full sync: reset all sync status and cleared last sync time');
 
     // Run normal sync (all data will be uploaded + all partner data downloaded)
     return syncWithServer();
@@ -330,7 +320,6 @@ class SyncService {
         'nickname': (json['nickname'] as String?) ?? '',
       };
     } catch (e) {
-      debugPrint('Error parsing QR data: $e');
       return null;
     }
   }
@@ -347,8 +336,6 @@ class SyncService {
     // Clear last sync time to download ALL data
     _lastSyncTime = null;
     await _prefs!.remove(_lastSyncTimeField);
-    
-    debugPrint('Key restored to: $oldKey');
     
     // Perform sync to download all data with the restored key
     return syncWithServer();

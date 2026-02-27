@@ -3,10 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import '../../data/services/ad_service.dart';
-import '../../data/services/purchase_service.dart';
-import '../../core/entitlements.dart';
 
-/// 배너 광고 위젯 (Free 등급만 표시)
+/// 배너 광고 위젯 (항상 표시)
 class BannerAdWidget extends ConsumerStatefulWidget {
   const BannerAdWidget({super.key});
 
@@ -34,7 +32,6 @@ class _BannerAdWidgetState extends ConsumerState<BannerAdWidget> {
       request: const AdRequest(),
       listener: BannerAdListener(
         onAdLoaded: (ad) {
-          debugPrint('[BannerAdWidget] ✅ Ad loaded successfully');
           if (mounted) {
             setState(() {
               _isLoaded = true;
@@ -42,7 +39,6 @@ class _BannerAdWidgetState extends ConsumerState<BannerAdWidget> {
           }
         },
         onAdFailedToLoad: (ad, error) {
-          debugPrint('[BannerAdWidget] ❌ Ad failed to load: $error');
           ad.dispose();
         },
       ),
@@ -64,18 +60,12 @@ class _BannerAdWidgetState extends ConsumerState<BannerAdWidget> {
       return const SizedBox.shrink();
     }
 
-    // 프리미엄 사용자는 광고 비표시
-    final subscription = ref.watch(subscriptionProvider);
-    if (subscription.isPremium) {
-      return const SizedBox.shrink();
-    }
-
     // 광고가 로드되지 않은 경우 — 공간만 확보
     if (!_isLoaded || _bannerAd == null) {
       return const SizedBox(height: 50);
     }
 
-    // 배너 광고 표시
+    // 배너 광고 표시 (항상)
     return Container(
       width: _bannerAd!.size.width.toDouble(),
       height: _bannerAd!.size.height.toDouble(),

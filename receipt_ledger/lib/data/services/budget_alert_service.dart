@@ -50,7 +50,6 @@ class BudgetAlertService {
         }
       }
     } catch (e) {
-      debugPrint('[BudgetAlertService] Error loading budget: $e');
     }
     
     return null;

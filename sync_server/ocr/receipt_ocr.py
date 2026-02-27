@@ -29,25 +29,33 @@ class ReceiptOCR:
     def __init__(self, use_gpu: bool = False, lang: str = 'korean', **kwargs):
         self.lang = lang
         self.model = None
+        self._current_key_index = 0
         
-        # Gemini API 키 로드 (여러 키 중 첫 번째 유효 키 사용)
-        api_key = (
-            os.environ.get("GEMINI_API_KEY_1")
-            or os.environ.get("GEMINI_API_KEY_2")
-            or os.environ.get("GEMINI_API_KEY_3")
-            or os.environ.get("GEMINI_API_KEY")
-        )
+        # 사용 가능한 API 키 목록 (순차적으로 시도)
+        self._api_keys = []
+        for key_name in ["GEMINI_API_KEY_1", "GEMINI_API_KEY_2", "GEMINI_API_KEY_3", "GEMINI_API_KEY"]:
+            key = os.environ.get(key_name)
+            if key and key not in self._api_keys:
+                self._api_keys.append(key)
         
-        if not api_key:
-            print("[OCR] WARNING: Gemini API key not found!")
+        if not self._api_keys:
+            print("[OCR] WARNING: No Gemini API keys found!")
             return
         
+        print(f"[OCR] Found {len(self._api_keys)} API key(s)")
+        self._init_model(0)
+
+    def _init_model(self, key_index: int):
+        """지정된 인덱스의 API 키로 모델 초기화"""
+        if key_index >= len(self._api_keys):
+            return
         try:
-            genai.configure(api_key=api_key)
+            self._current_key_index = key_index
+            genai.configure(api_key=self._api_keys[key_index])
             self.model = genai.GenerativeModel(GEMINI_MODEL)
-            print(f"[OCR] Gemini SDK initialized with model: {GEMINI_MODEL}")
+            print(f"[OCR] Gemini SDK initialized with key #{key_index + 1}, model: {GEMINI_MODEL}")
         except Exception as e:
-            print(f"[OCR] Gemini SDK init error: {e}")
+            print(f"[OCR] Gemini SDK init error with key #{key_index + 1}: {e}")
 
     # ============== 프롬프트 ==============
     
@@ -360,21 +368,44 @@ JSON만 응답하세요."""
     def process_image(self, image_data: bytes) -> Dict[str, Any]:
         """
         Gemini Vision SDK로 영수증 이미지 분석
+        모든 API 키를 순차 시도, 전부 실패 시 5초 후 재시도 (최대 2라운드)
         """
-        start_time = time.time()
-        
         # bytes → PIL Image
         image = Image.open(io.BytesIO(image_data))
         if image.mode in ('RGBA', 'P'):
             image = image.convert('RGB')
         
-        print("[OCR] Gemini Vision processing (SDK)...")
-        vision_result = self._call_gemini_vision(image)
-        if vision_result:
-            print(f"[OCR] Gemini Vision Success - {time.time()-start_time:.2f}s")
-            return self._normalize_response(vision_result)
+        max_rounds = 2  # 전체 키 순회 최대 횟수
+        last_error = None
+        
+        for round_num in range(max_rounds):
+            if round_num > 0:
+                wait_sec = 5
+                print(f"[OCR] All keys failed. Waiting {wait_sec}s before retry (round {round_num + 1})...")
+                time.sleep(wait_sec)
             
-        raise RuntimeError("Gemini Vision OCR failed")
+            for key_idx in range(len(self._api_keys)):
+                try:
+                    self._init_model(key_idx)
+                    start_time = time.time()
+                    
+                    print(f"[OCR] Trying key #{key_idx + 1}/{len(self._api_keys)} (round {round_num + 1})...")
+                    vision_result = self._call_gemini_vision(image)
+                    
+                    if vision_result:
+                        elapsed = time.time() - start_time
+                        print(f"[OCR] ✅ Success with key #{key_idx + 1} - {elapsed:.2f}s")
+                        return self._normalize_response(vision_result)
+                    else:
+                        print(f"[OCR] ❌ Key #{key_idx + 1} returned None, trying next...")
+                        last_error = "Gemini returned empty response"
+                        
+                except Exception as e:
+                    print(f"[OCR] ❌ Key #{key_idx + 1} error: {e}")
+                    last_error = str(e)
+                    continue
+        
+        raise RuntimeError(f"All API keys exhausted after {max_rounds} rounds. Last error: {last_error}")
 
     def process_image_v2(self, image_data: bytes, provider: str = 'gemini') -> Dict[str, Any]:
         """

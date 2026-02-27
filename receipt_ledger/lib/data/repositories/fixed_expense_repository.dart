@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/fixed_expense.dart';
 
@@ -27,7 +26,6 @@ class FixedExpenseRepository {
           .map((json) => FixedExpense.fromMap(json as Map<String, dynamic>))
           .toList();
     } catch (e) {
-      debugPrint('Error loading fixed expenses: $e');
       return [];
     }
   }
@@ -54,7 +52,6 @@ class FixedExpenseRepository {
       expenses.add(expense.copyWith(isSynced: false));
     }
     await _saveFixedExpenses(expenses);
-    debugPrint('Fixed expense saved: ${expense.name}');
   }
 
   /// Delete a fixed expense
@@ -62,7 +59,6 @@ class FixedExpenseRepository {
     final expenses = await _loadFixedExpenses();
     expenses.removeWhere((e) => e.id == id);
     await _saveFixedExpenses(expenses);
-    debugPrint('Fixed expense deleted: $id');
   }
 
   /// Get unsynced fixed expenses
@@ -86,7 +82,6 @@ class FixedExpenseRepository {
     final expenses = await _loadFixedExpenses();
     final updated = expenses.map((e) => e.copyWith(isSynced: false)).toList();
     await _saveFixedExpenses(updated);
-    debugPrint('All ${updated.length} fixed expenses marked as unsynced');
   }
 
   /// Insert a fixed expense (used by sync to save downloaded data)

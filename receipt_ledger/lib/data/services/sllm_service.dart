@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:dio/dio.dart';
-import 'package:flutter/foundation.dart';
 import '../../core/constants/app_constants.dart';
 import '../models/receipt.dart';
 
@@ -86,7 +85,6 @@ class SllmService {
     try {
       return json.decode(jsonStr) as Map<String, dynamic>;
     } catch (e) {
-      debugPrint('[OcrService] JSON parse error: $jsonStr');
       return {
         'store_name': 'Unknown',
         'date': DateTime.now().toString().split(' ')[0],

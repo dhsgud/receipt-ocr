@@ -1,5 +1,4 @@
 import 'package:device_calendar/device_calendar.dart';
-import 'package:flutter/foundation.dart';
 import '../models/transaction.dart';
 import '../../core/utils/formatters.dart';
 
@@ -56,7 +55,6 @@ class CalendarSyncService {
       permissionsGranted = await _calendarPlugin.requestPermissions();
       return permissionsGranted.isSuccess && (permissionsGranted.data ?? false);
     } catch (e) {
-      debugPrint('캘린더 권한 요청 실패: $e');
       return false;
     }
   }
@@ -88,7 +86,6 @@ class CalendarSyncService {
       }
       return [];
     } catch (e) {
-      debugPrint('캘린더 목록 조회 실패: $e');
       return [];
     }
   }
@@ -113,7 +110,6 @@ class CalendarSyncService {
       
       return null;
     } catch (e) {
-      debugPrint('캘린더 생성/찾기 실패: $e');
       return null;
     }
   }
@@ -180,7 +176,6 @@ class CalendarSyncService {
   /// 반환: 생성된 이벤트 ID (실패 시 null)
   Future<String?> syncTransaction(TransactionModel transaction) async {
     if (_selectedCalendarId == null) {
-      debugPrint('선택된 캘린더가 없습니다');
       return null;
     }
     
@@ -189,14 +184,11 @@ class CalendarSyncService {
       final result = await _calendarPlugin.createOrUpdateEvent(event);
       
       if (result?.isSuccess ?? false) {
-        debugPrint('이벤트 생성 성공: ${result?.data}');
         return result?.data;
       } else {
-        debugPrint('이벤트 생성 실패: ${result?.errors}');
         return null;
       }
     } catch (e) {
-      debugPrint('이벤트 동기화 오류: $e');
       return null;
     }
   }
@@ -214,7 +206,6 @@ class CalendarSyncService {
       final result = await _calendarPlugin.createOrUpdateEvent(event);
       return result?.isSuccess ?? false;
     } catch (e) {
-      debugPrint('이벤트 업데이트 오류: $e');
       return false;
     }
   }
@@ -232,7 +223,6 @@ class CalendarSyncService {
       );
       return result?.isSuccess ?? false;
     } catch (e) {
-      debugPrint('이벤트 삭제 오류: $e');
       return false;
     }
   }

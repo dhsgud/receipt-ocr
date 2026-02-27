@@ -11,12 +11,9 @@ import '../../data/models/transaction.dart';
 import '../../data/models/receipt.dart';
 import '../../shared/providers/app_providers.dart';
 
-import '../settings/subscription_screen.dart';
-import '../../data/services/purchase_service.dart';
 import '../../data/services/quota_service.dart';
 import '../../data/services/budget_alert_service.dart';
 import '../../data/services/ad_service.dart';
-import '../../core/entitlements.dart';
 
 import 'models/batch_receipt_item.dart';
 import 'widgets/receipt_form.dart';
@@ -36,7 +33,6 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
   bool _isProcessing = false;
   ReceiptData? _receiptData;
   String? _errorMessage;
-  bool _showDebugInfo = true; // 디버그 모드 ON/OFF
 
   // 일괄 처리 모드
   List<BatchReceiptItem> _batchItems = [];
@@ -92,13 +88,12 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
   Future<void> _processReceipt() async {
     if (_imageBytes == null) return;
 
-    // 구독 상태 확인
-    final subscription = ref.read(subscriptionProvider);
+    // 쿼터 확인
     final quotaNotifier = ref.read(quotaProvider.notifier);
     
-    // 인증된 사용자의 티어로 사용 가능 여부 확인
-    if (!quotaNotifier.canUseOcr(subscription.tier)) {
-      await _showSubscriptionDialog();
+    // 무료 횟수 소진 시 리워드 광고 다이얼로그 표시
+    if (!quotaNotifier.canUseOcr()) {
+      await _showRewardedAdDialog();
       return;
     }
 
@@ -117,8 +112,6 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
       // Gemini OCR 서버로 요청
       final ocrServerUrl = ref.read(ocrServerUrlProvider);
       final provider = ref.read(ocrProviderProvider);
-
-      debugPrint('[OCR] Using Gemini OCR server...');
 
       final sllmService = ref.read(sllmServiceProvider);
       receiptData = await sllmService.parseReceiptFromBytes(
@@ -163,7 +156,6 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
       await ref.read(quotaProvider.notifier).incrementUsage();
     } on DioException catch (e) {
       if (e.type == DioExceptionType.cancel) {
-        debugPrint('[OCR] Request cancelled by user');
         // 취소된 경우 에러 메시지 표시하지 않음
         if (mounted) {
           setState(() {
@@ -394,162 +386,33 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
     });
   }
 
-  /// 구독 유도 다이얼로그
-  Future<void> _showSubscriptionDialog() async {
-    final subscription = ref.read(subscriptionProvider);
-    final quotaState = ref.watch(quotaProvider);
+  /// 리워드 광고 바로 표시 (무료 횟수 소진 시)
+  Future<void> _showRewardedAdDialog() async {
     final adNotifier = ref.read(adProvider.notifier);
-    final tier = subscription.tier;
     
-    final remainingQuota = quotaState.getRemainingFreeQuota();
-    final bool isFreeExhausted = tier == SubscriptionTier.free && remainingQuota <= 0;
-    final bool canWatchAd = adNotifier.isRewardedAdReady && isFreeExhausted;
-    
-    final result = await showDialog<String>(
-      context: context,
-      barrierDismissible: true,
-      builder: (context) => AlertDialog(
-        title: Row(
-          children: [
-            Icon(
-              isFreeExhausted ? Icons.lock : Icons.workspace_premium, 
-              color: isFreeExhausted ? Colors.red : const Color(0xFF6366F1),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(isFreeExhausted ? 'OCR 횟수 소진' : '프리미엄 구독'),
-            ),
-            IconButton(
-              icon: const Icon(Icons.close, size: 20),
-              onPressed: () => Navigator.of(context).pop(),
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(),
-              splashRadius: 18,
-            ),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (isFreeExhausted) ...[
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.orange.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
-                ),
-                child: const Row(
-                  children: [
-                    Icon(Icons.warning_amber, color: Colors.orange),
-                    SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        '무료 체험 5회가 모두 소진되었습니다.',
-                        style: TextStyle(fontWeight: FontWeight.w500),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-              if (canWatchAd)
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.green.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Row(
-                    children: [
-                      Icon(Icons.play_circle_filled, color: Colors.green),
-                      SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          '광고를 시청하면 1회 추가 사용 가능!',
-                          style: TextStyle(fontWeight: FontWeight.w500, color: Colors.green),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-            ],
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: const Color(0xFF6366F1).withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: const Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('✨ 프리미엄 혜택', style: TextStyle(fontWeight: FontWeight.bold)),
-                  SizedBox(height: 8),
-                  Text('• 무제한 OCR 스캔'),
-                  Text('• 광고 제거'),
-                  Text('• 클라우드 동기화'),
-                  Text('• 멀티 디바이스 지원'),
-                ],
-              ),
-            ),
-            const SizedBox(height: 12),
-            const Text(
-              '💰 월 ₩1,900 / 연 ₩19,000',
-              style: TextStyle(
-                fontWeight: FontWeight.bold, 
-                color: Color(0xFF6366F1),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          if (canWatchAd)
-            TextButton.icon(
-              onPressed: () => Navigator.of(context).pop('watchAd'),
-              icon: const Icon(Icons.play_circle_outline, color: Colors.green),
-              label: const Text('광고 보기', style: TextStyle(color: Colors.green)),
-            ),
-          if (!isFreeExhausted)
-            TextButton(
-              onPressed: () => Navigator.of(context).pop('manual'),
-              child: const Text('수동 입력'),
-            ),
-          ElevatedButton(
-            onPressed: () => Navigator.of(context).pop('subscribe'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF6366F1),
-            ),
-            child: const Text(
-              '구독하기', 
-              style: TextStyle(color: Colors.white),
-            ),
-          ),
-        ],
-      ),
-    );
-
-    if (!mounted) return;
-    
-    if (result == 'watchAd') {
-      final rewarded = await adNotifier.showRewardedAd(
-        onRewarded: () async {
-          await ref.read(quotaProvider.notifier).addBonusFromAd();
-        },
-      );
-      if (rewarded && mounted) {
+    // 광고가 준비되지 않은 경우
+    if (!adNotifier.isRewardedAdReady) {
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('🎉 OCR 1회가 추가되었습니다!'),
-            backgroundColor: Colors.green,
+            content: Text('광고를 불러오는 중입니다. 잠시 후 다시 시도해주세요.'),
+            duration: Duration(seconds: 2),
           ),
         );
       }
-    } else if (result == 'subscribe') {
-      await Navigator.of(context).push(
-        MaterialPageRoute(builder: (context) => const SubscriptionScreen()),
-      );
+      return;
+    }
+    
+    // 바로 리워드 광고 표시
+    final rewarded = await adNotifier.showRewardedAd(
+      onRewarded: () async {
+        await ref.read(quotaProvider.notifier).addBonusFromAd();
+      },
+    );
+    
+    if (rewarded && mounted) {
+      // 보너스 적립 후 자동으로 영수증 분석 재시도 (알림 없이)
+      await _processReceipt();
     }
   }
 
@@ -830,69 +693,6 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
                 ),
               ),
 
-            // OCR 디버그 정보 표시
-            if (_showDebugInfo && _receiptData != null)
-              Container(
-                margin: const EdgeInsets.only(top: 16),
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.blue.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.blue.withValues(alpha: 0.3)),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Row(
-                          children: [
-                            Icon(Icons.bug_report, color: Colors.blue, size: 20),
-                            SizedBox(width: 8),
-                            Text(
-                              'OCR 분석 결과 (디버그)',
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: Colors.blue,
-                              ),
-                            ),
-                          ],
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.close, size: 18),
-                          onPressed: () => setState(() => _showDebugInfo = false),
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    _buildDebugRow('🏪 상점명', _receiptData!.storeName ?? '(인식 안됨)'),
-                    _buildDebugRow('📅 날짜', _receiptData!.date?.toString().split(' ')[0] ?? '(인식 안됨)'),
-                    _buildDebugRow('💰 총액', _receiptData!.totalAmount != null 
-                        ? '₩${_receiptData!.totalAmount!.toStringAsFixed(0)}' 
-                        : '(인식 안됨)'),
-                    _buildDebugRow('🏷️ 카테고리', _receiptData!.category ?? '(자동 추론)'),
-                    _buildDebugRow('📦 품목 수', '${_receiptData!.items.length}개'),
-                    if (_receiptData!.items.isNotEmpty) ...[
-                      const SizedBox(height: 8),
-                      const Text('품목 목록:', style: TextStyle(fontWeight: FontWeight.w500)),
-                      ...(_receiptData!.items.take(5).map((item) => Padding(
-                        padding: const EdgeInsets.only(left: 8, top: 4),
-                        child: Text('• ${item.name}: ₩${item.totalPrice.toStringAsFixed(0)}',
-                          style: const TextStyle(fontSize: 12)),
-                      ))),
-                      if (_receiptData!.items.length > 5)
-                        Padding(
-                          padding: const EdgeInsets.only(left: 8, top: 4),
-                          child: Text('... 외 ${_receiptData!.items.length - 5}개',
-                            style: const TextStyle(fontSize: 12, color: Colors.grey)),
-                        ),
-                    ],
-                  ],
-                ),
-              ),
 
             // Form Fields using Extracted Widget
             if (!_isProcessing) ...[
@@ -915,18 +715,7 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
     );
   }
 
-  Widget _buildDebugRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 4),
-      child: Row(
-        children: [
-          Text('$label:', style: const TextStyle(fontWeight: FontWeight.w500)),
-          const SizedBox(width: 8),
-          Expanded(child: Text(value, style: const TextStyle(color: Colors.black87))),
-        ],
-      ),
-    );
-  }
+
 
   Widget _buildImagePickerButtons() {
     return Column(

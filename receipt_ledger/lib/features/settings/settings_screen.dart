@@ -6,7 +6,6 @@ import '../../shared/providers/app_providers.dart';
 import '../../shared/widgets/common_widgets.dart';
 import 'category_dashboard_screen.dart';
 import 'calendar_settings_screen.dart';
-import 'widgets/subscription_section.dart';
 import 'widgets/sync_section.dart';
 import 'widgets/partner_section.dart';
 import 'widgets/notification_section.dart';
@@ -63,7 +62,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         }
       }
     } catch (e) {
-      debugPrint('Error initializing sync: $e');
       if (mounted) {
         setState(() {
           _isInitialized = true;
@@ -200,9 +198,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           : ListView(
               padding: const EdgeInsets.fromLTRB(20, 20, 20, 120),
               children: [
-                // Subscription
-                const SubscriptionSection(),
-                const SizedBox(height: 32),
 
                 // Theme
                 const Text(

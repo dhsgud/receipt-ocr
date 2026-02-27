@@ -40,7 +40,6 @@ class ReceiptImageService {
     try {
       final sourceFile = File(sourcePath);
       if (!await sourceFile.exists()) {
-        debugPrint('ReceiptImageService: Source file does not exist: $sourcePath');
         return null;
       }
 
@@ -54,14 +53,12 @@ class ReceiptImageService {
 
       // Copy original image
       await sourceFile.copy(imagePath);
-      debugPrint('ReceiptImageService: Saved original to $imagePath');
 
       // Generate thumbnail in background
       await _generateThumbnail(imagePath, thumbnailPath);
 
       return imagePath;
     } catch (e) {
-      debugPrint('ReceiptImageService: Error saving image: $e');
       return null;
     }
   }
@@ -84,14 +81,12 @@ class ReceiptImageService {
       // Save original image
       final imageFile = File(imagePath);
       await imageFile.writeAsBytes(imageBytes);
-      debugPrint('ReceiptImageService: Saved original to $imagePath');
 
       // Generate thumbnail in background
       await _generateThumbnail(imagePath, thumbnailPath);
 
       return imagePath;
     } catch (e) {
-      debugPrint('ReceiptImageService: Error saving image from bytes: $e');
       return null;
     }
   }
@@ -110,10 +105,8 @@ class ReceiptImageService {
 
       if (thumbnailBytes != null) {
         await File(targetPath).writeAsBytes(thumbnailBytes);
-        debugPrint('ReceiptImageService: Generated thumbnail at $targetPath');
       }
     } catch (e) {
-      debugPrint('ReceiptImageService: Error generating thumbnail: $e');
     }
   }
 
@@ -156,14 +149,11 @@ class ReceiptImageService {
 
       if (await imageFile.exists()) {
         await imageFile.delete();
-        debugPrint('ReceiptImageService: Deleted image for $transactionId');
       }
       if (await thumbnailFile.exists()) {
         await thumbnailFile.delete();
-        debugPrint('ReceiptImageService: Deleted thumbnail for $transactionId');
       }
     } catch (e) {
-      debugPrint('ReceiptImageService: Error deleting image: $e');
     }
   }
 }

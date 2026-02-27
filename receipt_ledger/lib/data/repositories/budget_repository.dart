@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/budget.dart';
 
@@ -27,7 +26,6 @@ class BudgetRepository {
           .map((json) => Budget.fromMap(json as Map<String, dynamic>))
           .toList();
     } catch (e) {
-      debugPrint('Error loading budgets: $e');
       return [];
     }
   }
@@ -61,7 +59,6 @@ class BudgetRepository {
       budgets.add(budget.copyWith(isSynced: false));
     }
     await _saveBudgets(budgets);
-    debugPrint('Budget saved: ${budget.year}/${budget.month}');
   }
 
   /// Get all budgets
@@ -90,7 +87,6 @@ class BudgetRepository {
     final budgets = await _loadBudgets();
     final updated = budgets.map((b) => b.copyWith(isSynced: false)).toList();
     await _saveBudgets(updated);
-    debugPrint('All ${updated.length} budgets marked as unsynced');
   }
 
   /// Insert a budget (used by sync to save downloaded data)

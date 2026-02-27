@@ -115,19 +115,16 @@ class NotificationMonitorService {
     
     final hasPermission = await isPermissionGranted();
     if (!hasPermission) {
-      debugPrint('[NotificationMonitor] Permission not granted');
       return;
     }
     
     _subscription = NotificationListenerService.notificationsStream.listen(
       _handleNotification,
       onError: (error) {
-        debugPrint('[NotificationMonitor] Error: $error');
       },
     );
     
     _isMonitoring = true;
-    debugPrint('[NotificationMonitor] Started monitoring notifications');
   }
 
   /// Stop monitoring notifications
@@ -135,7 +132,6 @@ class NotificationMonitorService {
     _subscription?.cancel();
     _subscription = null;
     _isMonitoring = false;
-    debugPrint('[NotificationMonitor] Stopped monitoring notifications');
   }
 
   /// Handle incoming notification
@@ -147,11 +143,8 @@ class NotificationMonitorService {
     final title = event.title ?? '';
     final content = event.content ?? '';
     
-    debugPrint('[NotificationMonitor] Received: $packageName - $title: $content');
-    
     // Check if it's from a payment app
     if (!paymentApps.contains(packageName)) {
-      debugPrint('[NotificationMonitor] Not a payment app, ignoring');
       return;
     }
     
@@ -181,14 +174,12 @@ class NotificationMonitorService {
     );
     
     if (!hasPaymentKeyword) {
-      debugPrint('[NotificationMonitor] No payment keyword found');
       return null;
     }
     
     // Extract amount
     final amount = _extractAmount(fullText);
     if (amount == null || amount <= 0) {
-      debugPrint('[NotificationMonitor] Could not extract amount');
       return null;
     }
     
@@ -309,8 +300,6 @@ class NotificationMonitorService {
 
   /// Register payment info to ledger
   Future<void> _registerToLedger(PaymentInfo info) async {
-    debugPrint('[NotificationMonitor] Registering to ledger: $info');
-    
     // Check for duplicate
     final duplicate = await _transactionRepository.findDuplicateTransaction(
       storeName: info.storeName,
@@ -319,7 +308,6 @@ class NotificationMonitorService {
     );
     
     if (duplicate != null) {
-      debugPrint('[NotificationMonitor] Duplicate transaction found, skipping');
       return;
     }
     
@@ -344,7 +332,6 @@ class NotificationMonitorService {
     );
     
     await _transactionRepository.insertTransaction(transaction);
-    debugPrint('[NotificationMonitor] Transaction registered: ${transaction.id}');
     
     // Notify listeners
     onTransactionRegistered?.call();

@@ -5,7 +5,7 @@ class AppConstants {
   
   // Sync Server
   /// 기본 서버 URL (설정에서 변경 가능)
-  static const String syncServerUrl = 'http://localhost:9999';
+  static const String syncServerUrl = 'http://183.96.3.137:9999';
 
   
   // App Info

@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 
 /// Service for caching receipt images locally (no server sync)
@@ -35,16 +34,13 @@ class ImageCacheService {
     try {
       final sourceFile = File(sourcePath);
       if (!await sourceFile.exists()) {
-        debugPrint('ImageCacheService: Source file not found: $sourcePath');
         return null;
       }
 
       final cachedPath = await _getCachedImagePath(transactionId);
       await sourceFile.copy(cachedPath);
-      debugPrint('ImageCacheService: Cached image for $transactionId');
       return cachedPath;
     } catch (e) {
-      debugPrint('ImageCacheService: Cache failed: $e');
       return null;
     }
   }
@@ -76,10 +72,8 @@ class ImageCacheService {
       final file = File(cachedPath);
       if (await file.exists()) {
         await file.delete();
-        debugPrint('ImageCacheService: Deleted cached image for $transactionId');
       }
     } catch (e) {
-      debugPrint('ImageCacheService: Delete failed: $e');
     }
   }
 
@@ -90,10 +84,8 @@ class ImageCacheService {
       if (await cacheDir.exists()) {
         await cacheDir.delete(recursive: true);
         await cacheDir.create(recursive: true);
-        debugPrint('ImageCacheService: Cache cleared');
       }
     } catch (e) {
-      debugPrint('ImageCacheService: Clear cache failed: $e');
     }
   }
 }
