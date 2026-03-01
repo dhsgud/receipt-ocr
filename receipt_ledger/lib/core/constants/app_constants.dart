@@ -5,12 +5,12 @@ class AppConstants {
   
   // Sync Server
   /// 기본 서버 URL (설정에서 변경 가능)
-  static const String syncServerUrl = 'http://183.96.3.137:9999';
+  static const String syncServerUrl = 'https://api.receipt-kdh.com';
 
   
   // App Info
   static const String appName = 'Receipt Ledger';
-  static const String appVersion = '0.1.0';
+  static const String appVersion = '1.0.0';
   
   // Default Categories
   static const List<String> defaultCategories = [
