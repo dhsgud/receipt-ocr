@@ -190,6 +190,8 @@ void showTransactionDetailsDialog({
           children: [
             if (!kIsWeb) ReceiptImageWithServer(ref: ref, transaction: transaction),
             DetailRow(label: '설명', value: transaction.description),
+            if (transaction.memo != null && transaction.memo!.isNotEmpty)
+              DetailRow(label: '메모', value: transaction.memo!),
             DetailRow(
               label: '금액',
               value:
@@ -237,6 +239,8 @@ void showEditTransactionDialog({
       TextEditingController(text: transaction.amount.toStringAsFixed(0));
   final storeController =
       TextEditingController(text: transaction.storeName ?? '');
+  final memoController =
+      TextEditingController(text: transaction.memo ?? '');
   String selectedCategory = transaction.category;
   bool isIncome = transaction.isIncome;
 
@@ -294,6 +298,16 @@ void showEditTransactionDialog({
                 },
               ),
               const SizedBox(height: 12),
+              TextField(
+                controller: memoController,
+                decoration: const InputDecoration(
+                  labelText: '메모 (선택)',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.sticky_note_2_outlined),
+                ),
+                maxLength: 50,
+              ),
+              const SizedBox(height: 12),
               SwitchListTile(
                 title: const Text('수입'),
                 subtitle: Text(
@@ -322,6 +336,9 @@ void showEditTransactionDialog({
                     : storeController.text.trim(),
                 category: selectedCategory,
                 isIncome: isIncome,
+                memo: memoController.text.trim().isEmpty
+                    ? null
+                    : memoController.text.trim(),
                 updatedAt: DateTime.now(),
                 isSynced: false,
               );

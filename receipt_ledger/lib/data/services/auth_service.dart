@@ -47,7 +47,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     scopes: ['email'],
   );
 
-  AuthNotifier() : super(const AuthState());
+  AuthNotifier() : super(const AuthState(isLoading: true));
 
   /// 앱 시작 시 자동 로그인 시도 (이전에 로그인한 적 있는 경우)
   Future<void> silentSignIn() async {

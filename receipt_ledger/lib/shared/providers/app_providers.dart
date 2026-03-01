@@ -3,9 +3,11 @@ import '../../core/constants/app_constants.dart';
 import '../../data/repositories/transaction_repository.dart';
 import '../../data/repositories/budget_repository.dart';
 import '../../data/repositories/fixed_expense_repository.dart';
+import '../../data/repositories/savings_goal_repository.dart';
 import '../../data/services/sllm_service.dart';
 import '../../data/services/sync_service.dart';
 import '../../data/models/transaction.dart';
+import '../../data/models/savings_goal.dart';
 
 /// 통계 소유자 필터
 enum StatsOwnerFilter {
@@ -190,4 +192,69 @@ final notificationMonitorEnabledProvider = StateProvider<bool>((ref) => false);
 
 /// 예산 초과 알림 활성화 여부
 final budgetAlertEnabledProvider = StateProvider<bool>((ref) => true);
+
+// ============================================================================
+// 목표 금액 관련 Providers
+// ============================================================================
+
+/// Savings goal repository provider
+final savingsGoalRepositoryProvider = Provider<SavingsGoalRepository>((ref) {
+  return SavingsGoalRepository();
+});
+
+/// 이번 달 목표 데이터
+final currentMonthGoalProvider = FutureProvider<SavingsGoal?>((ref) async {
+  final repo = ref.watch(savingsGoalRepositoryProvider);
+  final currentMonth = ref.watch(currentMonthProvider);
+  return await repo.getGoal(currentMonth.year, currentMonth.month);
+});
+
+/// 목표 달성률 데이터
+class GoalProgress {
+  final SavingsGoal goal;
+  final double income;
+  final double expense;
+  final double progressPercent;
+  final bool isAchieved;
+  final double currentValue;  // 현재 저축액 or 현재 지출액
+
+  GoalProgress({
+    required this.goal,
+    required this.income,
+    required this.expense,
+    required this.progressPercent,
+    required this.isAchieved,
+    required this.currentValue,
+  });
+}
+
+/// 목표 프로그레스 Provider
+final goalProgressProvider = FutureProvider<GoalProgress?>((ref) async {
+  final goal = await ref.watch(currentMonthGoalProvider.future);
+  if (goal == null) return null;
+
+  final stats = await ref.watch(monthlyStatsProvider.future);
+
+  final progress = goal.getProgress(
+    income: stats.income,
+    expense: stats.expense,
+  );
+  final achieved = goal.isAchieved(
+    income: stats.income,
+    expense: stats.expense,
+  );
+
+  final currentValue = goal.goalType == GoalType.saving
+      ? (stats.income - stats.expense)
+      : stats.expense;
+
+  return GoalProgress(
+    goal: goal,
+    income: stats.income,
+    expense: stats.expense,
+    progressPercent: progress,
+    isAchieved: achieved,
+    currentValue: currentValue,
+  );
+});
 

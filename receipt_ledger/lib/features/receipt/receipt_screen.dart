@@ -46,6 +46,7 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
   // Form controllers
   final _descriptionController = TextEditingController();
   final _amountController = TextEditingController();
+  final _memoController = TextEditingController();
   DateTime _selectedDate = DateTime.now();
   String? _selectedCategory;
   bool _isIncome = false;
@@ -55,6 +56,7 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
     _ocrCancelToken?.cancel('Screen disposed');
     _descriptionController.dispose();
     _amountController.dispose();
+    _memoController.dispose();
     super.dispose();
   }
 
@@ -483,6 +485,7 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
         // 폼 필드도 초기화
         _descriptionController.clear();
         _amountController.clear();
+        _memoController.clear();
         _selectedCategory = null;
         _isIncome = false;
         _selectedDate = DateTime.now();
@@ -594,6 +597,7 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
       ownerKey: syncService.myKey,
       createdAt: DateTime.now(),
       updatedAt: DateTime.now(),
+      memo: _memoController.text.trim().isEmpty ? null : _memoController.text.trim(),
     );
 
     await repository.insertTransaction(transaction);
@@ -629,6 +633,7 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
         _receiptData = null;
         _descriptionController.clear();
         _amountController.clear();
+        _memoController.clear();
         _selectedCategory = null;
         _isIncome = false;
       });
@@ -725,6 +730,7 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
               ReceiptForm(
                 amountController: _amountController,
                 descriptionController: _descriptionController,
+                memoController: _memoController,
                 isIncome: _isIncome,
                 selectedDate: _selectedDate,
                 selectedCategory: _selectedCategory,

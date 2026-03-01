@@ -6,6 +6,7 @@ import '../../../data/models/category.dart';
 class ReceiptForm extends StatefulWidget {
   final TextEditingController amountController;
   final TextEditingController descriptionController;
+  final TextEditingController memoController;
   final bool isIncome;
   final DateTime selectedDate;
   final String? selectedCategory;
@@ -18,6 +19,7 @@ class ReceiptForm extends StatefulWidget {
     super.key,
     required this.amountController,
     required this.descriptionController,
+    required this.memoController,
     required this.isIncome,
     required this.selectedDate,
     required this.selectedCategory,
@@ -107,6 +109,24 @@ class _ReceiptFormState extends State<ReceiptForm> {
         // Category
         _buildCategorySelector(),
         const SizedBox(height: 16),
+
+        // Memo
+        TextField(
+          controller: widget.memoController,
+          decoration: InputDecoration(
+            labelText: '메모',
+            hintText: '한줄 메모를 입력하세요 (선택)',
+            prefixIcon: const Icon(Icons.sticky_note_2_outlined, color: AppColors.primary),
+            filled: true,
+            fillColor: Theme.of(context).cardTheme.color,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide.none,
+            ),
+          ),
+          maxLength: 50,
+        ),
+        const SizedBox(height: 8),
 
         // Date
         InkWell(

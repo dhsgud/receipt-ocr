@@ -2,7 +2,7 @@ name: receipt_ledger
 description: "Receipt OCR Household Ledger App"
 publish_to: 'none'
 
-version: 0.1.0+1
+version: 1.0.0+1
 
 environment:
   sdk: ^3.10.4

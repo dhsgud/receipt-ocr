@@ -36,11 +36,25 @@ class ReceiptLedgerApp extends ConsumerWidget {
 }
 
 /// 로그인 상태에 따라 LoginScreen 또는 MainNavigationScreen 분기
-class AuthGate extends ConsumerWidget {
+class AuthGate extends ConsumerStatefulWidget {
   const AuthGate({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<AuthGate> createState() => _AuthGateState();
+}
+
+class _AuthGateState extends ConsumerState<AuthGate> {
+  @override
+  void initState() {
+    super.initState();
+    // 앱 시작 시 자동 로그인 시도 (이전에 로그인한 적 있는 경우)
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(authProvider.notifier).silentSignIn();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final authState = ref.watch(authProvider);
 
     // 로딩 중 (silentSignIn 시도 중)
@@ -93,10 +107,8 @@ class _MainNavigationScreenState extends ConsumerState<MainNavigationScreen> {
     });
   }
   
-  /// Initialize services (Auth + AdMob + Quota)
+  /// Initialize services (AdMob + Quota)
   Future<void> _initSubscription() async {
-    // Google 자동 로그인 시도
-    await ref.read(authProvider.notifier).silentSignIn();
     await ref.read(quotaProvider.notifier).init();
     
     // 서버에서 쿼터 동기화 (로그인 된 경우)

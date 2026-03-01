@@ -15,6 +15,7 @@ class TransactionModel {
   final DateTime updatedAt;
   final bool isSynced;
   final String? calendarEventId;  // 연동된 캘린더 이벤트 ID
+  final String? memo;  // 추가 한줄 메모
 
   TransactionModel({
     required this.id,
@@ -30,6 +31,7 @@ class TransactionModel {
     required this.updatedAt,
     this.isSynced = false,
     this.calendarEventId,
+    this.memo,
   });
 
   /// Create a copy with modified fields
@@ -47,6 +49,7 @@ class TransactionModel {
     DateTime? updatedAt,
     bool? isSynced,
     String? calendarEventId,
+    String? memo,
   }) {
     return TransactionModel(
       id: id ?? this.id,
@@ -62,6 +65,7 @@ class TransactionModel {
       updatedAt: updatedAt ?? this.updatedAt,
       isSynced: isSynced ?? this.isSynced,
       calendarEventId: calendarEventId ?? this.calendarEventId,
+      memo: memo ?? this.memo,
     );
   }
 
@@ -81,6 +85,7 @@ class TransactionModel {
       'updatedAt': updatedAt.toIso8601String(),
       'isSynced': isSynced ? 1 : 0,
       'calendarEventId': calendarEventId,
+      'memo': memo,
     };
   }
 
@@ -100,6 +105,7 @@ class TransactionModel {
       updatedAt: DateTime.parse(map['updatedAt'] as String),
       isSynced: map['isSynced'] == 1,
       calendarEventId: map['calendarEventId'] as String?,
+      memo: map['memo'] as String?,
     );
   }
 
@@ -112,6 +118,6 @@ class TransactionModel {
 
   @override
   String toString() {
-    return 'TransactionModel(id: $id, date: $date, category: $category, amount: $amount, description: $description)';
+    return 'TransactionModel(id: $id, date: $date, category: $category, amount: $amount, description: $description, memo: $memo)';
   }
 }
