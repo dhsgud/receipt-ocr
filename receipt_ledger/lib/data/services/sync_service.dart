@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
@@ -19,6 +18,7 @@ class SyncService {
   static const String _lastSyncTimeField = 'last_sync_time';
   static const String _myNicknameField = 'my_nickname';
   static const String _partnerNicknameField = 'partner_nickname';
+  static const String _migrationDoneField = 'owner_key_migration_done';
 
   final TransactionRepository _repository;
   final BudgetRepository _budgetRepository;
@@ -33,6 +33,7 @@ class SyncService {
   String _myNickname = '';
   String _partnerNickname = '';
   bool _isSyncing = false;
+  String? _userEmail;
 
   SyncService(this._repository, this._budgetRepository, this._fixedExpenseRepository) : 
     _dio = Dio(BaseOptions(
@@ -60,14 +61,67 @@ class SyncService {
     _myNickname = _prefs!.getString(_myNicknameField) ?? '';
     _partnerNickname = _prefs!.getString(_partnerNicknameField) ?? '';
 
-    // Generate key if not exists
+    // Generate fallback key if not exists (for offline mode without login)
     if (_myKey == null) {
       _myKey = const Uuid().v4();
       await _prefs!.setString(_myKeyField, _myKey!);
     }
+
+    // If user email is set, use it as myKey and migrate if needed
+    if (_userEmail != null && _userEmail!.contains('@')) {
+      await _migrateOwnerKeyToEmail();
+    }
   }
 
-  /// Get my unique key
+  /// One-time migration: UUID ownerKey → email
+  Future<void> _migrateOwnerKeyToEmail() async {
+    await _ensureInitialized();
+    final migrationDone = _prefs!.getBool(_migrationDoneField) ?? false;
+    
+    if (migrationDone) {
+      // Already migrated — just set myKey to email
+      _myKey = _userEmail;
+      return;
+    }
+
+    final oldKey = _myKey;
+    
+    // Skip if old key is already an email or not set
+    if (oldKey == null || oldKey.contains('@')) {
+      _myKey = _userEmail;
+      await _prefs!.setBool(_migrationDoneField, true);
+      return;
+    }
+
+    // Migrate local data
+    await _repository.migrateOwnerKey(oldKey, _userEmail!);
+    await _budgetRepository.migrateOwnerKey(oldKey, _userEmail!);
+    await _fixedExpenseRepository.migrateOwnerKey(oldKey, _userEmail!);
+
+    // Migrate server data
+    try {
+      await _dio.post(
+        '/api/migrate-owner',
+        data: {'old_owner_key': oldKey},
+        options: Options(
+          headers: {'X-User-Email': _userEmail!},
+        ),
+      );
+    } catch (e) {
+      // Server migration can be retried later — local is done
+    }
+
+    // Update myKey to email
+    _myKey = _userEmail;
+    await _prefs!.setString(_myKeyField, _userEmail!);
+    await _prefs!.setBool(_migrationDoneField, true);
+
+    // Reset sync time so all data re-syncs with new ownerKey
+    _lastSyncTime = null;
+    await _prefs!.remove(_lastSyncTimeField);
+  }
+
+  /// Get my unique key (email after migration, UUID before)
   String get myKey => _myKey ?? '';
 
   /// Get partner's key
@@ -78,6 +132,9 @@ class SyncService {
   
   /// Is currently syncing
   bool get isSyncing => _isSyncing;
+
+  /// Set user email for API authentication
+  set userEmail(String? email) => _userEmail = email;
 
   /// Get my nickname
   String get myNickname => _myNickname;
@@ -100,9 +157,8 @@ class SyncService {
   }
 
   /// Get display name for a given ownerKey
-  /// Returns nickname if available, otherwise truncated key
   String getOwnerName(String ownerKey) {
-    if (ownerKey == _myKey) {
+    if (ownerKey == _myKey || ownerKey == _userEmail) {
       return _myNickname.isNotEmpty ? _myNickname : '나';
     } else if (ownerKey == _partnerKey) {
       return _partnerNickname.isNotEmpty ? _partnerNickname : '파트너';
@@ -111,9 +167,9 @@ class SyncService {
   }
 
   /// Check if a transaction belongs to me
-  bool isMyTransaction(String ownerKey) => ownerKey == _myKey;
+  bool isMyTransaction(String ownerKey) => ownerKey == _myKey || ownerKey == _userEmail;
 
-  /// Set partner's key
+  /// Set partner's key (email or UUID)
   Future<void> setPartnerKey(String key) async {
     await _ensureInitialized();
     _partnerKey = key;
@@ -157,7 +213,7 @@ class SyncService {
     _isSyncing = true;
     
     try {
-      // Get unsynced local transactions
+      // Get unsynced local data
       final unsyncedTransactions = await _repository.getUnsyncedTransactions();
       final unsyncedBudgets = await _budgetRepository.getUnsyncedBudgets();
       final unsyncedFixedExpenses = await _fixedExpenseRepository.getUnsyncedFixedExpenses();
@@ -170,20 +226,24 @@ class SyncService {
         'lastSyncTime': _lastSyncTime,
       };
 
+      // Build headers: prefer email-based, include legacy keys for backward compat
+      final headers = <String, String>{
+        'X-Owner-Key': _myKey ?? '',
+        'X-Partner-Key': _partnerKey ?? '',
+      };
+      // Add email headers if available
+      if (_userEmail != null && _userEmail!.contains('@')) {
+        headers['X-User-Email'] = _userEmail!;
+      }
+      if (_partnerKey != null && _partnerKey!.contains('@')) {
+        headers['X-Partner-Email'] = _partnerKey!;
+      }
 
-
-      // Note: Images are stored locally only, not synced to server
-
-      // Send sync request with owner and partner keys
+      // Send sync request
       final response = await _dio.post(
         '/api/sync', 
         data: requestData,
-        options: Options(
-          headers: {
-            'X-Owner-Key': _myKey ?? '',
-            'X-Partner-Key': _partnerKey ?? '',
-          },
-        ),
+        options: Options(headers: headers),
       );
 
       if (response.statusCode == 200) {
@@ -259,19 +319,15 @@ class SyncService {
   }
 
   /// Reset sync status of all local data and perform full sync
-  /// Used when pairing with a new partner to share all existing data
   Future<SyncResult> fullSync() async {
-    // Reset all local data to unsynced
     await _repository.resetAllSyncStatus();
     await _budgetRepository.resetAllSyncStatus();
     await _fixedExpenseRepository.resetAllSyncStatus();
 
-    // Clear last sync time to download ALL data from server
     await _ensureInitialized();
     _lastSyncTime = null;
     await _prefs!.remove(_lastSyncTimeField);
 
-    // Run normal sync (all data will be uploaded + all partner data downloaded)
     return syncWithServer();
   }
 
@@ -303,20 +359,24 @@ class SyncService {
     }
   }
 
-  /// Generate QR code data for pairing (includes nickname)
+  /// Generate QR code data for pairing (includes email if available)
   String generateQrData() {
     return jsonEncode({
       'key': _myKey,
+      'email': _userEmail,
       'nickname': _myNickname,
     });
   }
 
-  /// Parse QR code data from partner (includes nickname)
+  /// Parse QR code data from partner (includes email if available)
   Map<String, String>? parseQrData(String data) {
     try {
       final json = jsonDecode(data) as Map<String, dynamic>;
+      // Prefer email for partner key, fallback to UUID key
+      final partnerEmail = json['email'] as String?;
+      final partnerUuidKey = json['key'] as String?;
       return {
-        'key': json['key'] as String,
+        'key': partnerEmail ?? partnerUuidKey ?? '',
         'nickname': (json['nickname'] as String?) ?? '',
       };
     } catch (e) {
@@ -325,19 +385,15 @@ class SyncService {
   }
 
   /// Restore my key from a previously backed-up key
-  /// This replaces the current key and downloads all data from the server
   Future<SyncResult> restoreMyKey(String oldKey) async {
     await _ensureInitialized();
     
-    // Replace current key with old key
     _myKey = oldKey;
     await _prefs!.setString(_myKeyField, oldKey);
     
-    // Clear last sync time to download ALL data
     _lastSyncTime = null;
     await _prefs!.remove(_lastSyncTimeField);
     
-    // Perform sync to download all data with the restored key
     return syncWithServer();
   }
 

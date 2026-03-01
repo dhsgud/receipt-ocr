@@ -6,6 +6,8 @@ import 'shared/providers/app_providers.dart';
 import 'data/services/notification_monitor_service.dart';
 import 'data/services/quota_service.dart';
 import 'data/services/ad_service.dart';
+import 'data/services/auth_service.dart';
+import 'features/auth/login_screen.dart';
 import 'features/home/home_screen.dart';
 import 'features/calendar/calendar_screen.dart';
 import 'features/receipt/receipt_screen.dart';
@@ -28,8 +30,35 @@ class ReceiptLedgerApp extends ConsumerWidget {
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
       themeMode: isDarkMode ? ThemeMode.dark : ThemeMode.light,
-      home: const MainNavigationScreen(),
+      home: const AuthGate(),
     );
+  }
+}
+
+/// 로그인 상태에 따라 LoginScreen 또는 MainNavigationScreen 분기
+class AuthGate extends ConsumerWidget {
+  const AuthGate({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final authState = ref.watch(authProvider);
+
+    // 로딩 중 (silentSignIn 시도 중)
+    if (authState.isLoading) {
+      return const Scaffold(
+        body: Center(
+          child: CircularProgressIndicator(color: AppColors.primary),
+        ),
+      );
+    }
+
+    // 로그인 안 됨 → 로그인 화면
+    if (!authState.isSignedIn) {
+      return const LoginScreen();
+    }
+
+    // 로그인 됨 → 메인 화면
+    return const MainNavigationScreen();
   }
 }
 
@@ -64,9 +93,19 @@ class _MainNavigationScreenState extends ConsumerState<MainNavigationScreen> {
     });
   }
   
-  /// Initialize services (AdMob + Quota)
+  /// Initialize services (Auth + AdMob + Quota)
   Future<void> _initSubscription() async {
+    // Google 자동 로그인 시도
+    await ref.read(authProvider.notifier).silentSignIn();
     await ref.read(quotaProvider.notifier).init();
+    
+    // 서버에서 쿼터 동기화 (로그인 된 경우)
+    final userEmail = ref.read(userEmailProvider);
+    if (userEmail != null) {
+      final serverUrl = ref.read(ocrServerUrlProvider);
+      await ref.read(quotaProvider.notifier).syncFromServer(serverUrl, userEmail);
+    }
+    
     // AdMob 초기화
     await ref.read(adProvider.notifier).init();
   }
@@ -134,6 +173,10 @@ class _MainNavigationScreenState extends ConsumerState<MainNavigationScreen> {
 
     try {
       final syncService = ref.read(syncServiceProvider);
+      
+      // Set user email for API authentication
+      final userEmail = ref.read(userEmailProvider);
+      syncService.userEmail = userEmail;
       
       // Initialize sync service
       await syncService.initialize();

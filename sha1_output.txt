@@ -1,0 +1,29 @@
+별칭 이름: upload
+생성 날짜: 2026. 2. 10.
+항목 유형: PrivateKeyEntry
+인증서 체인 길이: 1
+인증서[1]:
+소유자: CN=Donghan Kim, OU=Mobile App, O=Receipt Ledger, L=Seoul, ST=Seoul, C=KR
+발행자: CN=Donghan Kim, OU=Mobile App, O=Receipt Ledger, L=Seoul, ST=Seoul, C=KR
+일련 번호: 300e332683b8dcf9
+적합한 시작 날짜: Tue Feb 10 23:25:03 KST 2026 종료 날짜: Sat Jun 28 23:25:03 KST 2053
+인증서 지문:
+	 SHA1: 2A:9C:8B:7C:8B:4B:AF:D1:1B:02:33:C6:7C:FD:50:DA:5C:8C:12:3D
+	 SHA256: D6:F0:93:AC:2E:55:43:2B:AE:45:40:06:81:87:94:BF:3B:33:AC:53:09:B1:B4:2A:CD:EA:D5:64:90:9F:6B:79
+서명 알고리즘 이름: SHA384withRSA
+주체 공용 키 알고리즘: 2048비트 RSA 키
+버전: 3
+
+확장: 
+
+#1: ObjectId: 2.5.29.14 Criticality=false
+SubjectKeyIdentifier [
+KeyIdentifier [
+0000: C4 10 DD 78 C6 04 68 E6   6A FE 2B DF 20 A4 7E 0D  ...x..h.j.+. ...
+0010: EC 3E A4 FD                                        .>..
+]
+]
+
+
+Warning:
+JKS 키 저장소는 고유 형식을 사용합니다. "keytool -importkeystore -srckeystore c:\Users\ikm11\Desktop\receipt-ocr\receipt_ledger\android\app\upload-keystore.jks -destkeystore c:\Users\ikm11\Desktop\receipt-ocr\receipt_ledger\android\app\upload-keystore.jks -deststoretype pkcs12"를 사용하는 산업 표준 형식인 PKCS12로 이전하는 것이 좋습니다.

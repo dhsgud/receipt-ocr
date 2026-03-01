@@ -77,6 +77,23 @@ class FixedExpenseRepository {
     }
   }
 
+  /// Migrate ownerKey from UUID to email (one-time migration)
+  Future<int> migrateOwnerKey(String oldKey, String newEmail) async {
+    final expenses = await _loadFixedExpenses();
+    int count = 0;
+    final updated = expenses.map((e) {
+      if (e.ownerKey == oldKey) {
+        count++;
+        return e.copyWith(ownerKey: newEmail);
+      }
+      return e;
+    }).toList();
+    if (count > 0) {
+      await _saveFixedExpenses(updated);
+    }
+    return count;
+  }
+
   /// Reset sync status for all fixed expenses (for re-sync with new partner)
   Future<void> resetAllSyncStatus() async {
     final expenses = await _loadFixedExpenses();

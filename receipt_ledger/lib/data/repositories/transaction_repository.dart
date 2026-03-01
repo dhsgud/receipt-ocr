@@ -157,6 +157,23 @@ class TransactionRepository {
         .fold<double>(0.0, (double sum, t) => sum + t.amount);
   }
 
+  /// Migrate ownerKey from UUID to email (one-time migration)
+  Future<int> migrateOwnerKey(String oldKey, String newEmail) async {
+    final transactions = await _loadTransactions();
+    int count = 0;
+    final updated = transactions.map((t) {
+      if (t.ownerKey == oldKey) {
+        count++;
+        return t.copyWith(ownerKey: newEmail);
+      }
+      return t;
+    }).toList();
+    if (count > 0) {
+      await _saveTransactions(updated);
+    }
+    return count;
+  }
+
   /// Reset sync status for all transactions (for re-sync with new partner)
   Future<void> resetAllSyncStatus() async {
     final transactions = await _loadTransactions();

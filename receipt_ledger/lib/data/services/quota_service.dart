@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -8,10 +9,12 @@ import '../../core/entitlements.dart';
 class QuotaState {
   final int totalUsed; // 총 OCR 사용량
   final int bonusQuota; // 광고로 얻은 보너스 횟수
+  final bool isSynced; // 서버 동기화 여부
 
   const QuotaState({
     this.totalUsed = 0,
     this.bonusQuota = 0,
+    this.isSynced = false,
   });
 
   /// 남은 무료 횟수 계산
@@ -28,17 +31,24 @@ class QuotaState {
   QuotaState copyWith({
     int? totalUsed,
     int? bonusQuota,
+    bool? isSynced,
   }) {
     return QuotaState(
       totalUsed: totalUsed ?? this.totalUsed,
       bonusQuota: bonusQuota ?? this.bonusQuota,
+      isSynced: isSynced ?? this.isSynced,
     );
   }
 }
 
-/// 쿼터 서비스 - 로컬 SharedPreferences로 사용량 추적
+/// 쿼터 서비스 - 서버 + 로컬 하이브리드 관리
 class QuotaNotifier extends StateNotifier<QuotaState> {
   QuotaNotifier() : super(const QuotaState());
+
+  final Dio _dio = Dio(BaseOptions(
+    connectTimeout: const Duration(seconds: 10),
+    receiveTimeout: const Duration(seconds: 10),
+  ));
 
   // 로컬 저장 키
   static const String _totalUsedKey = 'quota_total_used';
@@ -61,6 +71,7 @@ class QuotaNotifier extends StateNotifier<QuotaState> {
         bonusQuota: bonusQuota,
       );
     } catch (e) {
+      // Silently fail — use defaults
     }
   }
 
@@ -71,6 +82,29 @@ class QuotaNotifier extends StateNotifier<QuotaState> {
       await prefs.setInt(_totalUsedKey, state.totalUsed);
       await prefs.setInt(_bonusQuotaKey, state.bonusQuota);
     } catch (e) {
+      // Silently fail
+    }
+  }
+
+  /// 서버에서 쿼터 동기화
+  Future<void> syncFromServer(String serverUrl, String userEmail) async {
+    try {
+      final response = await _dio.get(
+        '$serverUrl/api/quota',
+        options: Options(headers: {'X-User-Email': userEmail}),
+      );
+
+      if (response.statusCode == 200) {
+        final data = response.data as Map<String, dynamic>;
+        state = QuotaState(
+          totalUsed: data['total_used'] as int,
+          bonusQuota: data['bonus_quota'] as int,
+          isSynced: true,
+        );
+        await _saveToLocal();
+      }
+    } catch (e) {
+      // 서버 연결 실패 시 로컬 데이터 유지
     }
   }
 
@@ -84,7 +118,7 @@ class QuotaNotifier extends StateNotifier<QuotaState> {
     return state.getRemainingFreeQuota();
   }
 
-  /// OCR 사용 시 카운트 증가
+  /// OCR 사용 시 카운트 증가 (서버가 이미 증가시킴 → 로컬만 동기화)
   Future<void> incrementUsage() async {
     state = state.copyWith(
       totalUsed: state.totalUsed + 1,
@@ -92,7 +126,40 @@ class QuotaNotifier extends StateNotifier<QuotaState> {
     await _saveToLocal();
   }
 
-  /// 광고 시청으로 보너스 추가
+  /// 서버 동기화 후 로컬 상태 갱신 (OCR 성공 후 호출)
+  Future<void> syncAfterOcr(String serverUrl, String userEmail) async {
+    // 로컬을 먼저 즉시 증가 (UX 반응성)
+    await incrementUsage();
+    // 서버에서 실제 값 동기화
+    await syncFromServer(serverUrl, userEmail);
+  }
+
+  /// 광고 시청으로 보너스 추가 (서버에 요청)
+  Future<bool> addBonusFromAdOnServer(String serverUrl, String userEmail) async {
+    try {
+      final response = await _dio.post(
+        '$serverUrl/api/quota/bonus',
+        options: Options(headers: {'X-User-Email': userEmail}),
+      );
+
+      if (response.statusCode == 200) {
+        final data = response.data as Map<String, dynamic>;
+        state = QuotaState(
+          totalUsed: data['total_used'] as int,
+          bonusQuota: data['bonus_quota'] as int,
+          isSynced: true,
+        );
+        await _saveToLocal();
+        return true;
+      }
+    } catch (e) {
+      // 서버 실패 시 로컬에만 추가 (fallback)
+      await addBonusFromAd();
+    }
+    return false;
+  }
+
+  /// 광고 시청으로 보너스 추가 (로컬 fallback)
   Future<void> addBonusFromAd() async {
     state = state.copyWith(
       bonusQuota: state.bonusQuota + AdConfig.rewardedAdBonus,

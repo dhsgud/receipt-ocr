@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/theme/app_theme.dart';
 import '../../shared/providers/app_providers.dart';
 import '../../shared/widgets/common_widgets.dart';
+import '../../data/services/auth_service.dart';
 import 'category_dashboard_screen.dart';
 import 'calendar_settings_screen.dart';
 import 'widgets/sync_section.dart';
@@ -198,6 +199,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           : ListView(
               padding: const EdgeInsets.fromLTRB(20, 20, 20, 120),
               children: [
+
+                // Account Section
+                _buildAccountSection(),
+                const SizedBox(height: 32),
 
                 // Theme
                 const Text(
@@ -417,6 +422,97 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 ),
               ],
             ),
+    );
+  }
+
+  Widget _buildAccountSection() {
+    final authState = ref.watch(authProvider);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          '계정',
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: Colors.grey,
+          ),
+        ),
+        const SizedBox(height: 12),
+        StyledCard(
+          child: Row(
+            children: [
+              // Profile photo
+              CircleAvatar(
+                radius: 22,
+                backgroundColor: AppColors.primary.withValues(alpha: 0.2),
+                backgroundImage: authState.userPhotoUrl != null
+                    ? NetworkImage(authState.userPhotoUrl!)
+                    : null,
+                child: authState.userPhotoUrl == null
+                    ? const Icon(Icons.person, color: AppColors.primary)
+                    : null,
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      authState.userName ?? '사용자',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    if (authState.userEmail != null)
+                      Text(
+                        authState.userEmail!,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              TextButton(
+                onPressed: () async {
+                  final shouldLogout = await showDialog<bool>(
+                    context: context,
+                    builder: (context) => AlertDialog(
+                      title: const Text('로그아웃'),
+                      content: const Text('정말 로그아웃 하시겠습니까?'),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context, false),
+                          child: const Text('취소'),
+                        ),
+                        ElevatedButton(
+                          onPressed: () => Navigator.pop(context, true),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.expense,
+                          ),
+                          child: const Text('로그아웃', style: TextStyle(color: Colors.white)),
+                        ),
+                      ],
+                    ),
+                  );
+
+                  if (shouldLogout == true) {
+                    ref.read(authProvider.notifier).signOut();
+                  }
+                },
+                child: const Text(
+                  '로그아웃',
+                  style: TextStyle(color: AppColors.expense, fontSize: 13),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 

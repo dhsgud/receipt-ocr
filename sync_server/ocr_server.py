@@ -18,9 +18,9 @@ import os
 load_dotenv() # Load environment variables
 
 
-from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Header
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 
 # Import OCR modules
@@ -33,10 +33,64 @@ DB_PATH = Path(__file__).parent / "sync_data.db"
 IMAGES_PATH = Path(__file__).parent / "images"
 IMAGES_PATH.mkdir(exist_ok=True)
 
+# Rate limiting: per-email OCR call tracking
+# {email: [timestamp1, timestamp2, ...]}
+_ocr_rate_limit: Dict[str, list] = {}
+OCR_RATE_LIMIT_MAX = 10  # max calls per window
+OCR_RATE_LIMIT_WINDOW = 60  # seconds
+
+# Server-side quota
+QUOTA_FREE_LIMIT = 1  # must match client QuotaConfig.freeTotalLimit
+
+def _check_rate_limit(email: str) -> bool:
+    """Check if email is within rate limit. Returns True if allowed."""
+    import time
+    now = time.time()
+    if email not in _ocr_rate_limit:
+        _ocr_rate_limit[email] = []
+    # Remove old entries
+    _ocr_rate_limit[email] = [t for t in _ocr_rate_limit[email] if now - t < OCR_RATE_LIMIT_WINDOW]
+    if len(_ocr_rate_limit[email]) >= OCR_RATE_LIMIT_MAX:
+        return False
+    _ocr_rate_limit[email].append(now)
+    return True
+
+
+def _get_user_quota(conn, email: str) -> dict:
+    """Get or create user quota record."""
+    row = conn.execute("SELECT * FROM user_quotas WHERE email = ?", (email,)).fetchone()
+    if row:
+        return {"email": row["email"], "total_used": row["total_used"], "bonus_quota": row["bonus_quota"]}
+    # Create new record
+    now = datetime.now().isoformat()
+    conn.execute(
+        "INSERT INTO user_quotas (email, total_used, bonus_quota, created_at, updated_at) VALUES (?, 0, 0, ?, ?)",
+        (email, now, now),
+    )
+    conn.commit()
+    return {"email": email, "total_used": 0, "bonus_quota": 0}
+
+
+def _check_quota(conn, email: str) -> bool:
+    """Check if user has remaining quota. Returns True if allowed."""
+    q = _get_user_quota(conn, email)
+    remaining = (QUOTA_FREE_LIMIT + q["bonus_quota"]) - q["total_used"]
+    return remaining > 0
+
+
+def _increment_quota(conn, email: str):
+    """Increment total_used after successful OCR."""
+    now = datetime.now().isoformat()
+    conn.execute(
+        "UPDATE user_quotas SET total_used = total_used + 1, updated_at = ? WHERE email = ?",
+        (now, email),
+    )
+    conn.commit()
+
 app = FastAPI(
     title="Receipt Ledger OCR Server",
     description="Gemini Vision API 기반 영수증 OCR 서버",
-    version="2.2.0"
+    version="2.3.0"
 )
 
 # CORS 설정 (환경변수에서 읽기, 기본값: "*")
@@ -207,6 +261,15 @@ def init_db():
                 serverUpdatedAt TEXT NOT NULL
             )
         """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS user_quotas (
+                email TEXT PRIMARY KEY,
+                total_used INTEGER DEFAULT 0,
+                bonus_quota INTEGER DEFAULT 0,
+                created_at TEXT,
+                updated_at TEXT
+            )
+        """)
         conn.commit()
     print(f"Database initialized at: {DB_PATH}")
 
@@ -231,31 +294,56 @@ def row_to_transaction(row: sqlite3.Row) -> dict:
 # ============== OCR Endpoints ==============
 
 @app.post("/api/ocr", response_model=OCRResponse)
-async def process_receipt_ocr(request: OCRRequest):
+async def process_receipt_ocr(request: Request, ocr_req: OCRRequest):
     """
     Base64 인코딩된 이미지에서 영수증 정보 추출 (Gemini Vision)
+    X-User-Email 헤더 필수
     """
     import time
     start_time = time.time()
     
+    # Email authentication check
+    user_email = request.headers.get("X-User-Email")
+    if not user_email or "@" not in user_email:
+        raise HTTPException(status_code=401, detail="인증이 필요합니다 (X-User-Email 헤더 누락)")
+    
+    # Rate limiting
+    if not _check_rate_limit(user_email):
+        raise HTTPException(status_code=429, detail=f"요청 한도 초과 ({OCR_RATE_LIMIT_MAX}회/{OCR_RATE_LIMIT_WINDOW}초). 잠시 후 다시 시도해주세요.")
+    
+    # Server-side quota check
+    with get_db() as conn:
+        if not _check_quota(conn, user_email):
+            q = _get_user_quota(conn, user_email)
+            raise HTTPException(
+                status_code=403,
+                detail=f"무료 사용 횟수를 모두 소진했습니다. (사용: {q['total_used']}/{QUOTA_FREE_LIMIT + q['bonus_quota']})"
+            )
+    
+    print(f"[OCR] Request from: {user_email}")
+    
     try:
         # Base64 디코딩
-        image_data = request.image
+        image_data = ocr_req.image
         if ',' in image_data:
             image_data = image_data.split(',')[1]
         
         image_bytes = base64.b64decode(image_data)
-        print(f"[OCR] Received image: {len(image_bytes)} bytes")
+        print(f"[OCR] Received image: {len(image_bytes)} bytes from {user_email}")
         
         # 이미지 전처리
-        if request.preprocess:
+        if ocr_req.preprocess:
             image_bytes = preprocess_receipt_image(image_bytes)
             print(f"[OCR] Preprocessed: {len(image_bytes)} bytes")
         
         # OCR 실행 (Gemini Vision API)
         ocr = get_ocr_engine()
-        result = ocr.process_image_v2(image_bytes, provider=request.provider)
+        result = ocr.process_image_v2(image_bytes, provider=ocr_req.provider)
         print(f"[OCR] Result: {result}")
+        
+        # Increment server quota on success
+        with get_db() as conn:
+            _increment_quota(conn, user_email)
         
         # 처리 시간 계산
         processing_time = int((time.time() - start_time) * 1000)
@@ -276,6 +364,8 @@ async def process_receipt_ocr(request: OCRRequest):
             processing_time_ms=processing_time,
         )
         
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"[OCR ERROR] {str(e)}")
         traceback.print_exc()
@@ -335,6 +425,63 @@ async def ocr_status():
             "status": "error",
             "message": str(e),
         }
+
+
+# ============== Quota Endpoints ==============
+
+class QuotaResponse(BaseModel):
+    """쿼터 응답"""
+    total_used: int
+    bonus_quota: int
+    free_limit: int
+    remaining: int
+
+
+@app.get("/api/quota", response_model=QuotaResponse)
+async def get_quota(request: Request):
+    """사용자 쿼터 조회 (X-User-Email 헤더 필수)"""
+    user_email = request.headers.get("X-User-Email")
+    if not user_email or "@" not in user_email:
+        raise HTTPException(status_code=401, detail="인증이 필요합니다 (X-User-Email 헤더 누락)")
+    
+    with get_db() as conn:
+        q = _get_user_quota(conn, user_email)
+        total_limit = QUOTA_FREE_LIMIT + q["bonus_quota"]
+        remaining = max(0, total_limit - q["total_used"])
+        return QuotaResponse(
+            total_used=q["total_used"],
+            bonus_quota=q["bonus_quota"],
+            free_limit=QUOTA_FREE_LIMIT,
+            remaining=remaining,
+        )
+
+
+@app.post("/api/quota/bonus", response_model=QuotaResponse)
+async def add_quota_bonus(request: Request):
+    """광고 시청 후 보너스 쿼터 추가 (X-User-Email 헤더 필수)"""
+    user_email = request.headers.get("X-User-Email")
+    if not user_email or "@" not in user_email:
+        raise HTTPException(status_code=401, detail="인증이 필요합니다 (X-User-Email 헤더 누락)")
+    
+    with get_db() as conn:
+        # Ensure record exists
+        _get_user_quota(conn, user_email)
+        now = datetime.now().isoformat()
+        conn.execute(
+            "UPDATE user_quotas SET bonus_quota = bonus_quota + 1, updated_at = ? WHERE email = ?",
+            (now, user_email),
+        )
+        conn.commit()
+        
+        q = _get_user_quota(conn, user_email)
+        total_limit = QUOTA_FREE_LIMIT + q["bonus_quota"]
+        remaining = max(0, total_limit - q["total_used"])
+        return QuotaResponse(
+            total_used=q["total_used"],
+            bonus_quota=q["bonus_quota"],
+            free_limit=QUOTA_FREE_LIMIT,
+            remaining=remaining,
+        )
 
 
 # ============== Health & Info ==============
@@ -527,12 +674,17 @@ async def get_changes_since(since: Optional[str] = None):
 @app.post("/api/sync")
 async def sync_transactions(
     request: SyncRequest,
+    req: Request,
     owner_key: str = Header(None, alias="X-Owner-Key"),
     partner_key: str = Header(None, alias="X-Partner-Key")
 ):
-    """Full sync with partner-based filtering"""
+    """Full sync with email-based or key-based filtering"""
     server_time = datetime.now().isoformat()
     uploaded_count = 0
+    
+    # Prefer email-based identification, fallback to owner_key
+    user_email = req.headers.get("X-User-Email")
+    partner_email = req.headers.get("X-Partner-Email")
     
     with get_db() as conn:
         # Upload transactions
@@ -609,11 +761,17 @@ async def sync_transactions(
         
         conn.commit()
         
-        # Build list of allowed owner keys (self + partner)
+        # Build list of allowed owner keys for download filtering
+        # Prefer email-based, fallback to UUID-based
         allowed_keys = []
-        if owner_key:
+        if user_email and "@" in user_email:
+            allowed_keys.append(user_email)
+        elif owner_key:
             allowed_keys.append(owner_key)
-        if partner_key:
+        
+        if partner_email and "@" in partner_email:
+            allowed_keys.append(partner_email)
+        elif partner_key:
             allowed_keys.append(partner_key)
         
         # Download transactions
@@ -692,6 +850,60 @@ async def sync_transactions(
         downloadedFixedExpenses=downloaded_fixed,
         serverTime=server_time,
     )
+
+
+class MigrateOwnerRequest(BaseModel):
+    """UUID → 이메일 마이그레이션 요청"""
+    old_owner_key: str
+
+
+@app.post("/api/migrate-owner")
+async def migrate_owner_key(request: Request, body: MigrateOwnerRequest):
+    """
+    기존 UUID ownerKey를 이메일로 마이그레이션.
+    X-User-Email 헤더의 이메일로 old_owner_key를 일괄 변경.
+    """
+    user_email = request.headers.get("X-User-Email")
+    if not user_email or "@" not in user_email:
+        raise HTTPException(status_code=401, detail="인증이 필요합니다 (X-User-Email 헤더 누락)")
+    
+    old_key = body.old_owner_key
+    if not old_key:
+        raise HTTPException(status_code=400, detail="old_owner_key가 필요합니다")
+    
+    # 이미 이메일 형식이면 스킵 (중복 마이그레이션 방지)
+    if "@" in old_key:
+        return {"status": "skipped", "message": "이미 이메일 기반입니다", "migrated": 0}
+    
+    with get_db() as conn:
+        # Migrate transactions
+        r1 = conn.execute(
+            "UPDATE transactions SET ownerKey = ? WHERE ownerKey = ?",
+            (user_email, old_key)
+        )
+        # Migrate budgets
+        r2 = conn.execute(
+            "UPDATE budgets SET ownerKey = ? WHERE ownerKey = ?",
+            (user_email, old_key)
+        )
+        # Migrate fixed expenses
+        r3 = conn.execute(
+            "UPDATE fixed_expenses SET ownerKey = ? WHERE ownerKey = ?",
+            (user_email, old_key)
+        )
+        conn.commit()
+        
+        total = r1.rowcount + r2.rowcount + r3.rowcount
+        print(f"[Migration] {old_key} -> {user_email}: {total} records migrated")
+    
+    return {
+        "status": "ok",
+        "message": f"{total}건 마이그레이션 완료",
+        "migrated": total,
+        "transactions": r1.rowcount,
+        "budgets": r2.rowcount,
+        "fixed_expenses": r3.rowcount,
+    }
 
 
 # Startup event

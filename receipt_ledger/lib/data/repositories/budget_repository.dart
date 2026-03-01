@@ -82,6 +82,23 @@ class BudgetRepository {
     }
   }
 
+  /// Migrate ownerKey from UUID to email (one-time migration)
+  Future<int> migrateOwnerKey(String oldKey, String newEmail) async {
+    final budgets = await _loadBudgets();
+    int count = 0;
+    final updated = budgets.map((b) {
+      if (b.ownerKey == oldKey) {
+        count++;
+        return b.copyWith(ownerKey: newEmail);
+      }
+      return b;
+    }).toList();
+    if (count > 0) {
+      await _saveBudgets(updated);
+    }
+    return count;
+  }
+
   /// Reset sync status for all budgets (for re-sync with new partner)
   Future<void> resetAllSyncStatus() async {
     final budgets = await _loadBudgets();

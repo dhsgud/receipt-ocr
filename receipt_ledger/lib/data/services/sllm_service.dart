@@ -21,6 +21,7 @@ class SllmService {
     String? ocrServerUrl,
     String provider = 'gemini',
     CancelToken? cancelToken,
+    String? userEmail,
   }) async {
     try {
       return await _parseWithOcrServer(
@@ -28,6 +29,7 @@ class SllmService {
         ocrServerUrl ?? AppConstants.syncServerUrl,
         provider: provider,
         cancelToken: cancelToken,
+        userEmail: userEmail,
       );
     } on DioException catch (e) {
       if (e.type == DioExceptionType.cancel) {
@@ -40,7 +42,7 @@ class SllmService {
   }
 
   /// OCR 서버로 요청 (Python FastAPI + Gemini)
-  Future<ReceiptData> _parseWithOcrServer(Uint8List imageBytes, String serverUrl, {String provider = 'gemini', CancelToken? cancelToken}) async {
+  Future<ReceiptData> _parseWithOcrServer(Uint8List imageBytes, String serverUrl, {String provider = 'gemini', CancelToken? cancelToken, String? userEmail}) async {
     final base64Image = base64Encode(imageBytes);
     
     final response = await _dio.post(
@@ -50,6 +52,11 @@ class SllmService {
         'preprocess': true,
         'provider': provider,
       },
+      options: Options(
+        headers: {
+          if (userEmail != null) 'X-User-Email': userEmail,
+        },
+      ),
       cancelToken: cancelToken,
     );
 

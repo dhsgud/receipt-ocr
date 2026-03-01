@@ -14,6 +14,7 @@ import '../../shared/providers/app_providers.dart';
 import '../../data/services/quota_service.dart';
 import '../../data/services/budget_alert_service.dart';
 import '../../data/services/ad_service.dart';
+import '../../data/services/auth_service.dart';
 
 import 'models/batch_receipt_item.dart';
 import 'widgets/receipt_form.dart';
@@ -114,11 +115,13 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
       final provider = ref.read(ocrProviderProvider);
 
       final sllmService = ref.read(sllmServiceProvider);
+      final userEmail = ref.read(userEmailProvider);
       receiptData = await sllmService.parseReceiptFromBytes(
         _imageBytes!,
         ocrServerUrl: ocrServerUrl,
         provider: provider,
         cancelToken: _ocrCancelToken,
+        userEmail: userEmail,
       );
 
       if (!mounted) return;
@@ -152,8 +155,14 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
         _isIncome = receiptData.isIncome;
       });
       
-      // OCR 성공 시 사용량 증가
-      await ref.read(quotaProvider.notifier).incrementUsage();
+      // OCR 성공 시 서버 쿼터 동기화 (서버가 이미 total_used를 증가시킴)
+      final ocrServerUrl2 = ref.read(ocrServerUrlProvider);
+      final userEmail2 = ref.read(userEmailProvider);
+      if (userEmail2 != null) {
+        await ref.read(quotaProvider.notifier).syncAfterOcr(ocrServerUrl2, userEmail2);
+      } else {
+        await ref.read(quotaProvider.notifier).incrementUsage();
+      }
     } on DioException catch (e) {
       if (e.type == DioExceptionType.cancel) {
         // 취소된 경우 에러 메시지 표시하지 않음
@@ -162,6 +171,14 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
             _isProcessing = false;
           });
         }
+        return;
+      }
+      // 서버 쿼터 초과 (403) → 리워드 광고 표시
+      if (e.response?.statusCode == 403 && mounted) {
+        setState(() {
+          _isProcessing = false;
+        });
+        await _showRewardedAdDialog();
         return;
       }
       if (mounted) {
@@ -248,10 +265,12 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
 
         try {
           final sllmService = ref.read(sllmServiceProvider);
+          final userEmail = ref.read(userEmailProvider);
           final receiptData = await sllmService.parseReceiptFromBytes(
             item.bytes,
             ocrServerUrl: ocrServerUrl,
             provider: provider,
+            userEmail: userEmail,
           );
 
           if (mounted) {
@@ -406,7 +425,13 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
     // 바로 리워드 광고 표시
     final rewarded = await adNotifier.showRewardedAd(
       onRewarded: () async {
-        await ref.read(quotaProvider.notifier).addBonusFromAd();
+        final serverUrl = ref.read(ocrServerUrlProvider);
+        final email = ref.read(userEmailProvider);
+        if (email != null) {
+          await ref.read(quotaProvider.notifier).addBonusFromAdOnServer(serverUrl, email);
+        } else {
+          await ref.read(quotaProvider.notifier).addBonusFromAd();
+        }
       },
     );
     
