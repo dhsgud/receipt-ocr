@@ -64,7 +64,7 @@ class SllmService {
       final data = response.data as Map<String, dynamic>;
       return ReceiptData.fromOcrResponse(data);
     } else {
-      throw Exception('OCR server request failed: ${response.statusCode}');
+      throw Exception('영수증 분석 서버 요청 실패: ${response.statusCode}');
     }
   }
 
@@ -108,19 +108,19 @@ class SllmService {
       case DioExceptionType.connectionTimeout:
       case DioExceptionType.receiveTimeout:
       case DioExceptionType.sendTimeout:
-        return 'OCR 서버 연결 시간 초과. 네트워크를 확인해주세요.';
+        return '분석 서버 연결 시간 초과. 네트워크를 확인해주세요.';
       case DioExceptionType.connectionError:
-        return 'OCR 서버에 연결할 수 없습니다. 서버가 실행 중인지 확인해주세요.';
+        return '분석 서버에 연결할 수 없습니다. 서버가 실행 중인지 확인해주세요.';
       case DioExceptionType.badResponse:
         final statusCode = e.response?.statusCode;
         if (statusCode == 404) {
-          return 'OCR API 엔드포인트를 찾을 수 없습니다 (404).';
+          return '분석 API 엔드포인트를 찾을 수 없습니다 (404).';
         } else if (statusCode == 500) {
-          return 'OCR 서버 내부 오류 (500). 서버 로그를 확인해주세요.';
+          return '분석 서버 내부 오류 (500). 서버 로그를 확인해주세요.';
         }
-        return 'OCR 서버 오류: HTTP $statusCode';
+        return '분석 서버 오류: HTTP $statusCode';
       default:
-        return 'OCR 오류: ${e.message}';
+        return '분석 오류: ${e.message}';
     }
   }
 

@@ -14,7 +14,7 @@ class SubscriptionSection extends ConsumerWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
-          'OCR 사용량',
+          '분석 사용량',
           style: TextStyle(
             fontSize: 14,
             fontWeight: FontWeight.w600,

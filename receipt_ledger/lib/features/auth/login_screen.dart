@@ -65,7 +65,7 @@ class LoginScreen extends ConsumerWidget {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  '영수증 OCR로 간편하게 가계부 관리',
+                  '영수증 분석으로 간편하게 가계부 관리',
                   style: TextStyle(
                     fontSize: 14,
                     color: Colors.grey[500],
