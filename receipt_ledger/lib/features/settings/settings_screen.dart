@@ -265,7 +265,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              '통합 관리 대시보드',
+                              '예산 및 고정비 관리',
                               style: TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w500,
@@ -273,7 +273,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                             ),
                             SizedBox(height: 2),
                             Text(
-                              '카테고리, 예산, 고정비, 지출 분석',
+                              '예산 설정 및 고정비 관리',
                               style: TextStyle(
                                 fontSize: 12,
                                 color: Colors.grey,

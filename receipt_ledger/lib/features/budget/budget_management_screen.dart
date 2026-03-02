@@ -55,20 +55,24 @@ class _BudgetManagementViewState
 
   @override
   Widget build(BuildContext context) {
-    return ListView(
+    return Padding(
       padding: const EdgeInsets.all(16),
-      children: [
-        // 월 선택 헤더
-        _buildMonthHeader(),
-        const SizedBox(height: 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // 월 선택 헤더
+          _buildMonthHeader(),
+          const SizedBox(height: 24),
 
-        // 총 예산 설정
-        _buildTotalBudgetCard(),
-        const SizedBox(height: 24),
+          // 총 예산 설정
+          _buildTotalBudgetCard(),
+          const SizedBox(height: 24),
 
-        // 카테고리별 예산 설정
-        _buildCategoryBudgetSection(),
-      ],
+          // 카테고리별 예산 설정
+          _buildCategoryBudgetSection(),
+        ],
+      ),
     );
   }
 

@@ -2,55 +2,33 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../budget/budget_management_screen.dart';
 import 'fixed_expense_screen.dart';
-import '../statistics/spending_analysis_screen.dart';
 
-class CategoryDashboardScreen extends ConsumerStatefulWidget {
+/// 예산 및 고정비 관리 화면
+/// 단일 스크롤 화면으로 예산 설정 + 고정비 관리를 간단하게 제공
+class CategoryDashboardScreen extends ConsumerWidget {
   const CategoryDashboardScreen({super.key});
 
   @override
-  ConsumerState<CategoryDashboardScreen> createState() => _CategoryDashboardScreenState();
-}
-
-class _CategoryDashboardScreenState extends ConsumerState<CategoryDashboardScreen> with SingleTickerProviderStateMixin {
-  late TabController _tabController;
-
-  @override
-  void initState() {
-    super.initState();
-    _tabController = TabController(length: 3, vsync: this);
-  }
-
-  @override
-  void dispose() {
-    _tabController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('카테고리 및 예산 관리'),
-        bottom: TabBar(
-          controller: _tabController,
-          tabs: const [
-            Tab(text: '예산'), // Budget
-            Tab(text: '고정비'), // Fixed Expenses
-            Tab(text: '분석'), // Analysis
-          ],
-          labelStyle: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-          unselectedLabelStyle: TextStyle(fontSize: 16),
-          indicatorWeight: 3,
-          labelPadding: EdgeInsets.symmetric(horizontal: 4),
-        ),
+        title: const Text('예산 및 고정비 관리'),
       ),
-      body: TabBarView(
-        controller: _tabController,
-        children: const [
-          BudgetManagementView(),   // Refactored to view
-          FixedExpenseView(),       // Refactored to view
-          SpendingAnalysisView(),   // Refactored to view
-        ],
+      body: const SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // 예산 관리 섹션
+            BudgetManagementView(),
+
+            Divider(height: 48, indent: 16, endIndent: 16),
+
+            // 고정비 관리 섹션
+            FixedExpenseView(),
+
+            SizedBox(height: 32),
+          ],
+        ),
       ),
     );
   }

@@ -384,7 +384,30 @@ class SyncService {
     }
   }
 
-  /// Restore my key from a previously backed-up key
+  /// Restore data using the currently logged-in email
+  /// (preferred method after Google Sign-In migration)
+  Future<SyncResult> restoreFromEmail() async {
+    await _ensureInitialized();
+
+    if (_userEmail == null || !_userEmail!.contains('@')) {
+      return SyncResult(
+        success: false,
+        message: '로그인된 이메일이 없습니다. 먼저 로그인해주세요.',
+      );
+    }
+
+    // Set myKey to the current email
+    _myKey = _userEmail;
+    await _prefs!.setString(_myKeyField, _userEmail!);
+
+    // Reset sync time to pull all data from server
+    _lastSyncTime = null;
+    await _prefs!.remove(_lastSyncTimeField);
+
+    return fullSync();
+  }
+
+  /// Restore my key from a previously backed-up UUID key (legacy fallback)
   Future<SyncResult> restoreMyKey(String oldKey) async {
     await _ensureInitialized();
     

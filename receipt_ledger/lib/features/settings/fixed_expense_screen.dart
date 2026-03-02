@@ -36,26 +36,37 @@ class _FixedExpenseViewState extends ConsumerState<FixedExpenseView> {
   Widget build(BuildContext context) {
     final totalMonthly = _calculateMonthlyTotal();
 
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: Column(
-        children: [
-          // 월 고정비 총액 카드
-          _buildTotalCard(totalMonthly),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // 월 고정비 총액 카드
+        _buildTotalCard(totalMonthly),
 
-          // 고정비 목록
-          Expanded(
-            child: _fixedExpenses.isEmpty
-                ? _buildEmptyState()
-                : _buildFixedExpenseList(),
+        // 고정비 목록 또는 빈 상태
+        if (_fixedExpenses.isEmpty)
+          _buildEmptyState()
+        else
+          ..._buildFixedExpenseItems(),
+
+        // 고정비 추가 버튼
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: _showAddFixedExpenseDialog,
+              icon: const Icon(Icons.add),
+              label: const Text('고정비 추가'),
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
           ),
-        ],
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _showAddFixedExpenseDialog,
-        icon: const Icon(Icons.add),
-        label: const Text('고정비 추가'),
-      ),
+        ),
+      ],
     );
   }
 
@@ -133,16 +144,16 @@ class _FixedExpenseViewState extends ConsumerState<FixedExpenseView> {
 
   /// 빈 상태 위젯
   Widget _buildEmptyState() {
-    return Center(
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 32),
       child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(
             Icons.receipt_long,
-            size: 80,
+            size: 64,
             color: Colors.grey[300],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
           Text(
             '등록된 고정비가 없습니다',
             style: TextStyle(
@@ -150,7 +161,7 @@ class _FixedExpenseViewState extends ConsumerState<FixedExpenseView> {
               color: Colors.grey[600],
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 4),
           Text(
             '아래 버튼을 눌러 고정비를 추가하세요',
             style: TextStyle(
@@ -163,19 +174,16 @@ class _FixedExpenseViewState extends ConsumerState<FixedExpenseView> {
     );
   }
 
-  /// 고정비 목록
-  Widget _buildFixedExpenseList() {
+  /// 고정비 아이템 목록 (Column에 spread 가능)
+  List<Widget> _buildFixedExpenseItems() {
     // 결제일 임박 순으로 정렬
     final sorted = List<FixedExpense>.from(_fixedExpenses)
       ..sort((a, b) => a.daysUntilPayment().compareTo(b.daysUntilPayment()));
 
-    return ListView.builder(
+    return sorted.map((expense) => Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
-      itemCount: sorted.length,
-      itemBuilder: (context, index) {
-        return _buildFixedExpenseItem(sorted[index]);
-      },
-    );
+      child: _buildFixedExpenseItem(expense),
+    )).toList();
   }
 
   /// 고정비 아이템
@@ -511,9 +519,12 @@ class _FixedExpenseViewState extends ConsumerState<FixedExpenseView> {
 
     // 로컬 저장소에 저장
     await ref.read(fixedExpenseRepositoryProvider).saveFixedExpense(expense);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('$name 고정비가 추가되었습니다.')),
-    );
+    
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('$name 고정비가 추가되었습니다.')),
+      );
+    }
   }
 
   Future<void> _updateFixedExpense(FixedExpense expense) async {
@@ -526,9 +537,12 @@ class _FixedExpenseViewState extends ConsumerState<FixedExpenseView> {
 
     // 로컬 저장소에 저장
     await ref.read(fixedExpenseRepositoryProvider).saveFixedExpense(expense);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('${expense.name} 고정비가 수정되었습니다.')),
-    );
+    
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${expense.name} 고정비가 수정되었습니다.')),
+      );
+    }
   }
 
   Future<void> _deleteFixedExpense(FixedExpense expense) async {
@@ -538,8 +552,11 @@ class _FixedExpenseViewState extends ConsumerState<FixedExpenseView> {
 
     // 로컬 저장소에서 삭제
     await ref.read(fixedExpenseRepositoryProvider).deleteFixedExpense(expense.id);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('${expense.name} 고정비가 삭제되었습니다.')),
-    );
-  }
+    
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${expense.name} 고정비가 삭제되었습니다.')),
+      );
+    }
+  } 
 }

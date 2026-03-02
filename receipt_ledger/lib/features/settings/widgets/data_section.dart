@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../data/services/auth_service.dart';
 import '../../../shared/providers/app_providers.dart';
 import '../../../shared/widgets/common_widgets.dart';
 import 'settings_dialogs.dart';
@@ -24,7 +25,22 @@ class _DataManagementSectionState extends ConsumerState<DataManagementSection> {
 
   Future<void> _handleRestore(String oldKey) async {
     if (oldKey.isEmpty) return;
+    await _executeRestore(() async {
+      final syncService = ref.read(syncServiceProvider);
+      await syncService.initialize();
+      return syncService.restoreMyKey(oldKey);
+    });
+  }
 
+  Future<void> _handleRestoreFromEmail() async {
+    await _executeRestore(() async {
+      final syncService = ref.read(syncServiceProvider);
+      await syncService.initialize();
+      return syncService.restoreFromEmail();
+    });
+  }
+
+  Future<void> _executeRestore(Future<dynamic> Function() restoreFn) async {
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -38,9 +54,7 @@ class _DataManagementSectionState extends ConsumerState<DataManagementSection> {
     setState(() { _isRestoring = true; });
 
     try {
-      final syncService = ref.read(syncServiceProvider);
-      await syncService.initialize();
-      final result = await syncService.restoreMyKey(oldKey);
+      final result = await restoreFn();
 
       if (mounted) {
         ScaffoldMessenger.of(context).hideCurrentSnackBar();
@@ -56,6 +70,7 @@ class _DataManagementSectionState extends ConsumerState<DataManagementSection> {
       }
 
       if (result.success) {
+        final syncService = ref.read(syncServiceProvider);
         final newKey = syncService.myKey;
         final newQr = syncService.generateQrData();
         
@@ -102,6 +117,10 @@ class _DataManagementSectionState extends ConsumerState<DataManagementSection> {
 
   @override
   Widget build(BuildContext context) {
+    final authState = ref.watch(authProvider);
+    final userEmail = authState.userEmail;
+    final isLoggedIn = userEmail != null && userEmail.contains('@');
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -122,6 +141,8 @@ class _DataManagementSectionState extends ConsumerState<DataManagementSection> {
                   context: context, 
                   ref: ref, 
                   onRestore: _handleRestore,
+                  userEmail: userEmail,
+                  onRestoreFromEmail: isLoggedIn ? _handleRestoreFromEmail : null,
                 ),
           child: Row(
             children: [
@@ -140,8 +161,12 @@ class _DataManagementSectionState extends ConsumerState<DataManagementSection> {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      _isRestoring ? '복원 중...' : '이전 키를 입력하여 서버에서 데이터 복원',
-                      style: TextStyle(
+                      _isRestoring 
+                          ? '복원 중...' 
+                          : isLoggedIn 
+                              ? '로그인한 계정으로 서버에서 데이터 복원'
+                              : '이전 키를 입력하여 서버에서 데이터 복원',
+                      style: const TextStyle(
                         fontSize: 12,
                         color: Colors.grey,
                       ),
