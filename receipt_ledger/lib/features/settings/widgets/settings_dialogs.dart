@@ -157,81 +157,321 @@ void showAddPartnerDialog({
   required WidgetRef ref,
   required Function(String key, String nickname) onPartnerLinked,
 }) {
-  final partnerKeyController = TextEditingController();
-  final partnerNicknameController = TextEditingController();
+  final partnerEmailController = TextEditingController();
+  bool isSending = false;
 
   showDialog(
     context: context,
-    builder: (context) => AlertDialog(
-      title: const Text('파트너 추가'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Text(
-            '파트너의 공유 키와 닉네임을 입력하세요',
-            style: TextStyle(fontSize: 14, color: Colors.grey),
-          ),
-          const SizedBox(height: 16),
-          TextField(
-            controller: partnerKeyController,
-            decoration: InputDecoration(
-              labelText: '파트너 키',
-              hintText: 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx',
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
+    builder: (context) => StatefulBuilder(
+      builder: (context, setState) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.person_add, color: AppColors.primary),
+            SizedBox(width: 8),
+            Text('파트너 요청'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              '파트너의 이메일을 입력하세요.\n상대방이 수락하면 데이터가 공유됩니다.',
+              style: TextStyle(fontSize: 14, color: Colors.grey),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: partnerEmailController,
+              keyboardType: TextInputType.emailAddress,
+              decoration: InputDecoration(
+                labelText: '파트너 이메일',
+                hintText: 'partner@example.com',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                prefixIcon: const Icon(Icons.email_outlined),
               ),
             ),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: partnerNicknameController,
-            maxLength: 10,
-            decoration: InputDecoration(
-              labelText: '파트너 닉네임 (선택)',
-              hintText: '예: 지수, 영희',
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.blue.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.blue.withValues(alpha: 0.3)),
               ),
-              prefixIcon: const Icon(Icons.badge_outlined),
+              child: const Row(
+                children: [
+                  Icon(Icons.info_outline, color: Colors.blue, size: 18),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      '상대방이 같은 앱에 가입되어 있어야 합니다',
+                      style: TextStyle(fontSize: 12, color: Colors.blue),
+                    ),
+                  ),
+                ],
+              ),
             ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: isSending ? null : () => Navigator.pop(context),
+            child: const Text('취소'),
+          ),
+          ElevatedButton(
+            onPressed: isSending ? null : () async {
+              final email = partnerEmailController.text.trim();
+              if (email.isEmpty || !email.contains('@')) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('유효한 이메일을 입력해주세요')),
+                );
+                return;
+              }
+
+              setState(() => isSending = true);
+
+              final syncService = ref.read(syncServiceProvider);
+              final result = await syncService.sendPartnerRequest(
+                email,
+                nickname: syncService.myNickname,
+              );
+
+              if (context.mounted) {
+                Navigator.pop(context);
+                final isOk = result['status'] == 'ok';
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(result['message'] ?? (isOk ? '요청 전송 완료' : '요청 실패')),
+                    backgroundColor: isOk ? AppColors.income : AppColors.expense,
+                  ),
+                );
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+            ),
+            child: isSending
+                ? const SizedBox(
+                    width: 18, height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                  )
+                : const Text('요청 보내기', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('취소'),
-        ),
-        ElevatedButton(
-          onPressed: () async {
-            final key = partnerKeyController.text.trim();
-            if (key.isEmpty) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('파트너 키를 입력해주세요')),
-              );
-              return;
-            }
+    ),
+  );
+}
 
-            final syncService = ref.read(syncServiceProvider);
-            await syncService.setPartnerKey(key);
-            
-            final partnerNickname = partnerNicknameController.text.trim();
-            if (partnerNickname.isNotEmpty) {
-              await syncService.setPartnerNickname(partnerNickname);
-            }
-            
-            onPartnerLinked(key, partnerNickname);
-            
-            if (context.mounted) {
-              Navigator.pop(context);
-            }
-          },
-          style: ElevatedButton.styleFrom(
-            backgroundColor: AppColors.primary,
+void showPartnerRequestsDialog({
+  required BuildContext context,
+  required WidgetRef ref,
+  required List<dynamic> incomingRequests,
+  required List<dynamic> outgoingRequests,
+  required VoidCallback onChanged,
+}) {
+  showDialog(
+    context: context,
+    builder: (context) => StatefulBuilder(
+      builder: (context, setState) {
+        bool isProcessing = false;
+
+        return AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.notifications_active, color: AppColors.primary),
+              SizedBox(width: 8),
+              Text('파트너 요청'),
+            ],
           ),
-          child: const Text('연결', style: TextStyle(color: Colors.white)),
-        ),
-      ],
+          content: SizedBox(
+            width: double.maxFinite,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Incoming requests
+                  if (incomingRequests.isNotEmpty) ...[
+                    const Text(
+                      '받은 요청',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.grey,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    ...incomingRequests.map((req) {
+                      final fromEmail = req['from_email'] as String? ?? '';
+                      final fromNickname = req['from_nickname'] as String? ?? '';
+                      final requestId = req['id'] as int;
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                const Icon(Icons.person, size: 20, color: AppColors.primary),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      if (fromNickname.isNotEmpty)
+                                        Text(
+                                          fromNickname,
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.w600,
+                                            fontSize: 14,
+                                          ),
+                                        ),
+                                      Text(
+                                        fromEmail,
+                                        style: TextStyle(
+                                          fontSize: fromNickname.isNotEmpty ? 12 : 14,
+                                          color: fromNickname.isNotEmpty ? Colors.grey : null,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 10),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.end,
+                              children: [
+                                OutlinedButton(
+                                  onPressed: isProcessing ? null : () async {
+                                    setState(() => isProcessing = true);
+                                    final syncService = ref.read(syncServiceProvider);
+                                    final result = await syncService.rejectPartnerRequest(requestId);
+                                    if (context.mounted) {
+                                      Navigator.pop(context);
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Text(result['message'] ?? '거절됨'),
+                                          backgroundColor: AppColors.expense,
+                                        ),
+                                      );
+                                      onChanged();
+                                    }
+                                  },
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: AppColors.expense,
+                                    side: const BorderSide(color: AppColors.expense),
+                                  ),
+                                  child: const Text('거절'),
+                                ),
+                                const SizedBox(width: 8),
+                                ElevatedButton(
+                                  onPressed: isProcessing ? null : () async {
+                                    setState(() => isProcessing = true);
+                                    final syncService = ref.read(syncServiceProvider);
+                                    final result = await syncService.acceptPartnerRequest(requestId);
+                                    if (context.mounted) {
+                                      Navigator.pop(context);
+                                      final isOk = result['status'] == 'ok';
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Text(isOk
+                                              ? '파트너가 연결되었습니다! 동기화를 시작합니다...'
+                                              : (result['message'] ?? '수락 실패')),
+                                          backgroundColor: isOk ? AppColors.income : AppColors.expense,
+                                        ),
+                                      );
+                                      if (isOk) {
+                                        final partnerEmail = result['partner_email'] as String? ?? '';
+                                        final partnerNickname = result['partner_nickname'] as String? ?? '';
+                                        onChanged();
+                                      }
+                                    }
+                                  },
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: AppColors.income,
+                                  ),
+                                  child: const Text('수락', style: TextStyle(color: Colors.white)),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      );
+                    }),
+                  ],
+                  // Outgoing pending requests
+                  if (outgoingRequests.isNotEmpty) ...[
+                    if (incomingRequests.isNotEmpty) const SizedBox(height: 16),
+                    const Text(
+                      '보낸 요청 (대기 중)',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.grey,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    ...outgoingRequests.map((req) {
+                      final toEmail = req['to_email'] as String? ?? '';
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.orange.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.orange.withValues(alpha: 0.2)),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.hourglass_empty, size: 20, color: Colors.orange),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                toEmail,
+                                style: const TextStyle(fontSize: 14),
+                              ),
+                            ),
+                            const Text(
+                              '대기 중',
+                              style: TextStyle(fontSize: 12, color: Colors.orange),
+                            ),
+                          ],
+                        ),
+                      );
+                    }),
+                  ],
+                  // No requests at all
+                  if (incomingRequests.isEmpty && outgoingRequests.isEmpty)
+                    const Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(20),
+                        child: Text(
+                          '파트너 요청이 없습니다',
+                          style: TextStyle(color: Colors.grey),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('닫기'),
+            ),
+          ],
+        );
+      },
     ),
   );
 }

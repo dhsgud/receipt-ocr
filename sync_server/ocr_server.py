@@ -42,8 +42,16 @@ OCR_RATE_LIMIT_WINDOW = 60  # seconds
 # Server-side quota
 QUOTA_FREE_LIMIT = 1  # must match client QuotaConfig.freeTotalLimit
 
+# Admin emails (unlimited OCR)
+ADMIN_EMAILS = {
+    "jinjinjara0721@gmail.com",
+    "ikm111023@gmail.com",
+}
+
 def _check_rate_limit(email: str) -> bool:
     """Check if email is within rate limit. Returns True if allowed."""
+    if email in ADMIN_EMAILS:
+        return True
     import time
     now = time.time()
     if email not in _ocr_rate_limit:
@@ -73,6 +81,8 @@ def _get_user_quota(conn, email: str) -> dict:
 
 def _check_quota(conn, email: str) -> bool:
     """Check if user has remaining quota. Returns True if allowed."""
+    if email in ADMIN_EMAILS:
+        return True
     q = _get_user_quota(conn, email)
     remaining = (QUOTA_FREE_LIMIT + q["bonus_quota"]) - q["total_used"]
     return remaining > 0
@@ -268,6 +278,17 @@ def init_db():
                 bonus_quota INTEGER DEFAULT 0,
                 created_at TEXT,
                 updated_at TEXT
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS partner_requests (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                from_email TEXT NOT NULL,
+                to_email TEXT NOT NULL,
+                from_nickname TEXT DEFAULT '',
+                status TEXT DEFAULT 'pending',
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
             )
         """)
         conn.commit()
@@ -904,6 +925,223 @@ async def migrate_owner_key(request: Request, body: MigrateOwnerRequest):
         "budgets": r2.rowcount,
         "fixed_expenses": r3.rowcount,
     }
+
+
+# ============== Partner Request Endpoints ==============
+
+class PartnerRequestBody(BaseModel):
+    """파트너 요청 본문"""
+    to_email: str
+    nickname: Optional[str] = ''
+
+
+@app.post("/api/partner/request")
+async def send_partner_request(request: Request, body: PartnerRequestBody):
+    """
+    파트너 요청 전송. 상대방이 수락해야 파트너가 됩니다.
+    X-User-Email 헤더 필수
+    """
+    from_email = request.headers.get("X-User-Email")
+    if not from_email or "@" not in from_email:
+        raise HTTPException(status_code=401, detail="인증이 필요합니다")
+    
+    to_email = body.to_email.strip()
+    if not to_email or "@" not in to_email:
+        raise HTTPException(status_code=400, detail="유효한 이메일을 입력해주세요")
+    
+    if from_email == to_email:
+        raise HTTPException(status_code=400, detail="자기 자신에게 요청을 보낼 수 없습니다")
+    
+    now = datetime.now().isoformat()
+    
+    with get_db() as conn:
+        # Check for existing pending request from me to them
+        existing = conn.execute(
+            "SELECT * FROM partner_requests WHERE from_email = ? AND to_email = ? AND status = 'pending'",
+            (from_email, to_email)
+        ).fetchone()
+        if existing:
+            raise HTTPException(status_code=409, detail="이미 대기 중인 요청이 있습니다")
+        
+        # Check if already partners (accepted request in either direction)
+        accepted = conn.execute(
+            "SELECT * FROM partner_requests WHERE status = 'accepted' AND "
+            "((from_email = ? AND to_email = ?) OR (from_email = ? AND to_email = ?))",
+            (from_email, to_email, to_email, from_email)
+        ).fetchone()
+        if accepted:
+            raise HTTPException(status_code=409, detail="이미 파트너로 연결되어 있습니다")
+        
+        conn.execute(
+            "INSERT INTO partner_requests (from_email, to_email, from_nickname, status, created_at, updated_at) "
+            "VALUES (?, ?, ?, 'pending', ?, ?)",
+            (from_email, to_email, body.nickname or '', now, now)
+        )
+        conn.commit()
+    
+    print(f"[Partner] Request: {from_email} -> {to_email}")
+    return {"status": "ok", "message": "파트너 요청을 보냈습니다"}
+
+
+@app.get("/api/partner/requests")
+async def get_partner_requests(request: Request):
+    """
+    내게 온 대기 중인 파트너 요청 목록 + 내 요청 상태 조회
+    X-User-Email 헤더 필수
+    """
+    user_email = request.headers.get("X-User-Email")
+    if not user_email or "@" not in user_email:
+        raise HTTPException(status_code=401, detail="인증이 필요합니다")
+    
+    with get_db() as conn:
+        # Pending requests TO me
+        incoming = conn.execute(
+            "SELECT id, from_email, from_nickname, created_at FROM partner_requests "
+            "WHERE to_email = ? AND status = 'pending' ORDER BY created_at DESC",
+            (user_email,)
+        ).fetchall()
+        
+        # My outgoing pending requests
+        outgoing = conn.execute(
+            "SELECT id, to_email, status, created_at FROM partner_requests "
+            "WHERE from_email = ? AND status = 'pending' ORDER BY created_at DESC",
+            (user_email,)
+        ).fetchall()
+        
+        # Current accepted partner (if any)
+        accepted = conn.execute(
+            "SELECT * FROM partner_requests WHERE status = 'accepted' AND "
+            "(from_email = ? OR to_email = ?)",
+            (user_email, user_email)
+        ).fetchone()
+        
+        partner_email = None
+        partner_nickname = ''
+        if accepted:
+            if accepted["from_email"] == user_email:
+                partner_email = accepted["to_email"]
+            else:
+                partner_email = accepted["from_email"]
+                partner_nickname = accepted["from_nickname"] or ''
+    
+    return {
+        "incoming": [{"id": r["id"], "from_email": r["from_email"], "from_nickname": r["from_nickname"], "created_at": r["created_at"]} for r in incoming],
+        "outgoing": [{"id": r["id"], "to_email": r["to_email"], "status": r["status"], "created_at": r["created_at"]} for r in outgoing],
+        "partner_email": partner_email,
+        "partner_nickname": partner_nickname,
+    }
+
+
+@app.post("/api/partner/accept/{request_id}")
+async def accept_partner_request(request_id: int, request: Request):
+    """
+    파트너 요청 수락. 수락하면 서로 데이터 공유 시작.
+    X-User-Email 헤더 필수
+    """
+    user_email = request.headers.get("X-User-Email")
+    if not user_email or "@" not in user_email:
+        raise HTTPException(status_code=401, detail="인증이 필요합니다")
+    
+    now = datetime.now().isoformat()
+    
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT * FROM partner_requests WHERE id = ? AND to_email = ? AND status = 'pending'",
+            (request_id, user_email)
+        ).fetchone()
+        
+        if not row:
+            raise HTTPException(status_code=404, detail="요청을 찾을 수 없습니다")
+        
+        # Cancel any other accepted partnerships for both users
+        conn.execute(
+            "UPDATE partner_requests SET status = 'cancelled', updated_at = ? "
+            "WHERE status = 'accepted' AND (from_email = ? OR to_email = ? OR from_email = ? OR to_email = ?)",
+            (now, user_email, user_email, row["from_email"], row["from_email"])
+        )
+        
+        # Accept this request
+        conn.execute(
+            "UPDATE partner_requests SET status = 'accepted', updated_at = ? WHERE id = ?",
+            (now, request_id)
+        )
+        
+        # Reject all other pending requests for both users
+        conn.execute(
+            "UPDATE partner_requests SET status = 'rejected', updated_at = ? "
+            "WHERE status = 'pending' AND id != ? AND (to_email = ? OR to_email = ?)",
+            (now, request_id, user_email, row["from_email"])
+        )
+        
+        conn.commit()
+        partner_email = row["from_email"]
+        partner_nickname = row["from_nickname"] or ''
+    
+    print(f"[Partner] Accepted: {partner_email} <-> {user_email}")
+    return {
+        "status": "ok",
+        "message": "파트너 요청을 수락했습니다",
+        "partner_email": partner_email,
+        "partner_nickname": partner_nickname,
+    }
+
+
+@app.post("/api/partner/reject/{request_id}")
+async def reject_partner_request(request_id: int, request: Request):
+    """
+    파트너 요청 거절.
+    X-User-Email 헤더 필수
+    """
+    user_email = request.headers.get("X-User-Email")
+    if not user_email or "@" not in user_email:
+        raise HTTPException(status_code=401, detail="인증이 필요합니다")
+    
+    now = datetime.now().isoformat()
+    
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT * FROM partner_requests WHERE id = ? AND to_email = ? AND status = 'pending'",
+            (request_id, user_email)
+        ).fetchone()
+        
+        if not row:
+            raise HTTPException(status_code=404, detail="요청을 찾을 수 없습니다")
+        
+        conn.execute(
+            "UPDATE partner_requests SET status = 'rejected', updated_at = ? WHERE id = ?",
+            (now, request_id)
+        )
+        conn.commit()
+    
+    print(f"[Partner] Rejected: request {request_id} by {user_email}")
+    return {"status": "ok", "message": "파트너 요청을 거절했습니다"}
+
+
+@app.post("/api/partner/disconnect")
+async def disconnect_partner(request: Request):
+    """
+    파트너 연결 해제. 양쪽 모두 파트너 해제됨.
+    X-User-Email 헤더 필수
+    """
+    user_email = request.headers.get("X-User-Email")
+    if not user_email or "@" not in user_email:
+        raise HTTPException(status_code=401, detail="인증이 필요합니다")
+    
+    now = datetime.now().isoformat()
+    
+    with get_db() as conn:
+        result = conn.execute(
+            "UPDATE partner_requests SET status = 'disconnected', updated_at = ? "
+            "WHERE status = 'accepted' AND (from_email = ? OR to_email = ?)",
+            (now, user_email, user_email)
+        )
+        conn.commit()
+        
+        if result.rowcount == 0:
+            raise HTTPException(status_code=404, detail="연결된 파트너가 없습니다")
+    
+    print(f"[Partner] Disconnected: {user_email}")
+    return {"status": "ok", "message": "파트너 연결이 해제되었습니다"}
 
 
 # Startup event

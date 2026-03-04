@@ -420,6 +420,98 @@ class SyncService {
     return syncWithServer();
   }
 
+  /// Send a partner request to another user by email
+  Future<Map<String, dynamic>> sendPartnerRequest(String toEmail, {String nickname = ''}) async {
+    try {
+      final response = await _dio.post(
+        '/api/partner/request',
+        data: {'to_email': toEmail, 'nickname': nickname},
+        options: Options(headers: {'X-User-Email': _userEmail ?? ''}),
+      );
+      return response.data as Map<String, dynamic>;
+    } on DioException catch (e) {
+      final detail = e.response?.data is Map ? (e.response!.data as Map)['detail'] ?? '' : '';
+      return {'status': 'error', 'message': detail.isNotEmpty ? detail : _getDioErrorMessage(e)};
+    } catch (e) {
+      return {'status': 'error', 'message': '요청 실패: $e'};
+    }
+  }
+
+  /// Get incoming/outgoing partner requests and current partner info
+  Future<Map<String, dynamic>> getPartnerRequests() async {
+    try {
+      final response = await _dio.get(
+        '/api/partner/requests',
+        options: Options(headers: {'X-User-Email': _userEmail ?? ''}),
+      );
+      return response.data as Map<String, dynamic>;
+    } on DioException catch (e) {
+      return {'incoming': [], 'outgoing': [], 'partner_email': null, 'partner_nickname': ''};
+    } catch (e) {
+      return {'incoming': [], 'outgoing': [], 'partner_email': null, 'partner_nickname': ''};
+    }
+  }
+
+  /// Accept a partner request by its ID
+  Future<Map<String, dynamic>> acceptPartnerRequest(int requestId) async {
+    try {
+      final response = await _dio.post(
+        '/api/partner/accept/$requestId',
+        options: Options(headers: {'X-User-Email': _userEmail ?? ''}),
+      );
+      final data = response.data as Map<String, dynamic>;
+      // Auto-set partner key on accept
+      final partnerEmail = data['partner_email'] as String?;
+      if (partnerEmail != null) {
+        await setPartnerKey(partnerEmail);
+        final nick = data['partner_nickname'] as String? ?? '';
+        if (nick.isNotEmpty) {
+          await setPartnerNickname(nick);
+        }
+      }
+      return data;
+    } on DioException catch (e) {
+      final detail = e.response?.data is Map ? (e.response!.data as Map)['detail'] ?? '' : '';
+      return {'status': 'error', 'message': detail.isNotEmpty ? detail : _getDioErrorMessage(e)};
+    } catch (e) {
+      return {'status': 'error', 'message': '수락 실패: $e'};
+    }
+  }
+
+  /// Reject a partner request by its ID
+  Future<Map<String, dynamic>> rejectPartnerRequest(int requestId) async {
+    try {
+      final response = await _dio.post(
+        '/api/partner/reject/$requestId',
+        options: Options(headers: {'X-User-Email': _userEmail ?? ''}),
+      );
+      return response.data as Map<String, dynamic>;
+    } on DioException catch (e) {
+      final detail = e.response?.data is Map ? (e.response!.data as Map)['detail'] ?? '' : '';
+      return {'status': 'error', 'message': detail.isNotEmpty ? detail : _getDioErrorMessage(e)};
+    } catch (e) {
+      return {'status': 'error', 'message': '거절 실패: $e'};
+    }
+  }
+
+  /// Disconnect from current partner (server-side)
+  Future<Map<String, dynamic>> disconnectPartner() async {
+    try {
+      final response = await _dio.post(
+        '/api/partner/disconnect',
+        options: Options(headers: {'X-User-Email': _userEmail ?? ''}),
+      );
+      // Clear local partner data too
+      await clearPartner();
+      return response.data as Map<String, dynamic>;
+    } on DioException catch (e) {
+      final detail = e.response?.data is Map ? (e.response!.data as Map)['detail'] ?? '' : '';
+      return {'status': 'error', 'message': detail.isNotEmpty ? detail : _getDioErrorMessage(e)};
+    } catch (e) {
+      return {'status': 'error', 'message': '연결 해제 실패: $e'};
+    }
+  }
+
   String _getDioErrorMessage(DioException e) {
     switch (e.type) {
       case DioExceptionType.connectionTimeout:

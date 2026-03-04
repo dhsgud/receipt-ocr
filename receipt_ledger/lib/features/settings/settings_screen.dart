@@ -29,6 +29,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   String _myNickname = '';
   String _partnerNickname = '';
   bool _showSyncTutorial = false;
+  List<dynamic> _incomingRequests = [];
+  List<dynamic> _outgoingRequests = [];
 
   @override
   void initState() {
@@ -61,6 +63,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             _showSyncTutorial = !(prefs.getBool('sync_tutorial_completed') ?? false);
           });
         }
+        
+        // Load partner requests from server
+        await _loadPartnerRequests();
       }
     } catch (e) {
       if (mounted) {
@@ -70,6 +75,37 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           _myKey = 'Error loading key';
         });
       }
+    }
+  }
+
+  Future<void> _loadPartnerRequests() async {
+    try {
+      final syncService = ref.read(syncServiceProvider);
+      final data = await syncService.getPartnerRequests();
+      
+      if (mounted) {
+        setState(() {
+          _incomingRequests = data['incoming'] as List<dynamic>? ?? [];
+          _outgoingRequests = data['outgoing'] as List<dynamic>? ?? [];
+          
+          // Update partner from server-side accepted state
+          final serverPartner = data['partner_email'] as String?;
+          if (serverPartner != null && serverPartner.isNotEmpty) {
+            _partnerKey = serverPartner;
+            final serverNickname = data['partner_nickname'] as String? ?? '';
+            if (serverNickname.isNotEmpty) {
+              _partnerNickname = serverNickname;
+            }
+            // Sync local partner key
+            syncService.setPartnerKey(serverPartner);
+            if (serverNickname.isNotEmpty) {
+              syncService.setPartnerNickname(serverNickname);
+            }
+          }
+        });
+      }
+    } catch (e) {
+      // Silently ignore — partner requests are non-critical
     }
   }
 
@@ -136,40 +172,52 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Future<void> _onPartnerLinked(String key, String nickname) async {
-    setState(() {
-      _partnerKey = key;
-      _partnerNickname = nickname;
-    });
+    // After sending a request, just refresh the request list
+    await _loadPartnerRequests();
+  }
+
+  Future<void> _onPartnerCleared() async {
+    final syncService = ref.read(syncServiceProvider);
+    final result = await syncService.disconnectPartner();
 
     if (mounted) {
+      final isOk = result['status'] == 'ok';
+      setState(() {
+        _partnerKey = null;
+        _partnerNickname = '';
+      });
+
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('파트너 연결 완료! 데이터 동기화를 시작합니다...'),
-          backgroundColor: AppColors.income,
+        SnackBar(
+          content: Text(result['message'] ?? (isOk ? '파트너 연결 해제됨' : '연결 해제 실패')),
+          backgroundColor: isOk ? AppColors.income : AppColors.expense,
         ),
       );
 
-      // Auto-trigger full sync after partner pairing
-      setState(() {
-        _isSyncing = true;
-      });
+      await _loadPartnerRequests();
+    }
+  }
+
+  Future<void> _onPartnerRequestChanged() async {
+    await _loadPartnerRequests();
+    
+    // If a partner was just accepted, trigger full sync
+    if (_partnerKey != null && _partnerKey!.isNotEmpty) {
+      setState(() => _isSyncing = true);
 
       final syncService = ref.read(syncServiceProvider);
       final result = await syncService.fullSync();
 
-      // Refresh data
       ref.invalidate(transactionsProvider);
       ref.invalidate(monthlyTransactionsProvider);
       ref.invalidate(monthlyStatsProvider);
 
-      setState(() {
-        _isSyncing = false;
-      });
+      setState(() => _isSyncing = false);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(result.success 
+            content: Text(result.success
                 ? '동기화 완료! (업로드: ${result.uploaded}, 다운로드: ${result.downloaded})'
                 : '동기화 실패: ${result.message}'),
             backgroundColor: result.success ? AppColors.income : AppColors.expense,
@@ -177,13 +225,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         );
       }
     }
-  }
-
-  void _onPartnerCleared() {
-    setState(() {
-      _partnerKey = null;
-      _partnerNickname = '';
-    });
   }
 
   @override
@@ -316,11 +357,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   partnerNickname: _partnerNickname,
                   onNicknameChanged: (val) {
                     setState(() => _myNickname = val);
-                    // Also update provider just in case
                     ref.read(myNicknameProvider.notifier).state = val;
                   },
                   onPartnerLinked: _onPartnerLinked,
                   onPartnerCleared: _onPartnerCleared,
+                  incomingRequests: _incomingRequests,
+                  outgoingRequests: _outgoingRequests,
+                  onRefreshRequests: _onPartnerRequestChanged,
                 ),
                 const SizedBox(height: 32),
                 
