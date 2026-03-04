@@ -8,6 +8,8 @@ import 'data/services/quota_service.dart';
 import 'data/services/ad_service.dart';
 import 'data/services/auth_service.dart';
 import 'features/auth/login_screen.dart';
+import 'features/auth/splash_screen.dart';
+import 'features/onboarding/onboarding_screen.dart';
 import 'features/home/home_screen.dart';
 import 'features/calendar/calendar_screen.dart';
 import 'features/receipt/receipt_screen.dart';
@@ -35,7 +37,7 @@ class ReceiptLedgerApp extends ConsumerWidget {
   }
 }
 
-/// 로그인 상태에 따라 LoginScreen 또는 MainNavigationScreen 분기
+/// 로그인 상태에 따라 SplashScreen → LoginScreen 또는 MainNavigationScreen 분기
 class AuthGate extends ConsumerStatefulWidget {
   const AuthGate({super.key});
 
@@ -44,31 +46,63 @@ class AuthGate extends ConsumerStatefulWidget {
 }
 
 class _AuthGateState extends ConsumerState<AuthGate> {
+  bool _showSplash = true;
+  bool _showOnboarding = false;
+  bool _onboardingChecked = false;
+
   @override
   void initState() {
     super.initState();
     // 앱 시작 시 자동 로그인 시도 (이전에 로그인한 적 있는 경우)
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(authProvider.notifier).silentSignIn();
+      _checkOnboardingStatus();
     });
+  }
+
+  Future<void> _checkOnboardingStatus() async {
+    final completed = await isOnboardingCompleted();
+    if (mounted) {
+      setState(() {
+        _showOnboarding = !completed;
+        _onboardingChecked = true;
+      });
+    }
+  }
+
+  void _onOnboardingComplete() {
+    if (mounted) {
+      setState(() {
+        _showOnboarding = false;
+      });
+    }
+  }
+
+  void _onSplashComplete() {
+    if (mounted) {
+      setState(() {
+        _showSplash = false;
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authProvider);
 
-    // 로딩 중 (silentSignIn 시도 중)
-    if (authState.isLoading) {
-      return const Scaffold(
-        body: Center(
-          child: CircularProgressIndicator(color: AppColors.primary),
-        ),
-      );
+    // 스플래시 스크린 표시 (앱 최초 로딩 시)
+    if (_showSplash) {
+      return SplashScreen(onComplete: _onSplashComplete);
     }
 
     // 로그인 안 됨 → 로그인 화면
     if (!authState.isSignedIn) {
       return const LoginScreen();
+    }
+
+    // 로그인 됨 → 온보딩 미완료 시 온보딩 화면
+    if (_onboardingChecked && _showOnboarding) {
+      return OnboardingScreen(onComplete: _onOnboardingComplete);
     }
 
     // 로그인 됨 → 메인 화면
