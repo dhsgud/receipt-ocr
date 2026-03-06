@@ -64,5 +64,20 @@
 	<string>지출 내역을 캘린더에 동기화하기 위해 캘린더 접근 권한이 필요합니다.</string>
 	<key>GADApplicationIdentifier</key>
 	<string>ca-app-pub-1570373945115921~7409213855</string>
+	<!-- Google Sign-In Client ID -->
+	<key>GIDClientID</key>
+	<string>609318741893-cmvo1mknumc33fc2q05113d0t7hekdg4.apps.googleusercontent.com</string>
+	<!-- Google Sign-In URL Scheme -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.googleusercontent.apps.609318741893-cmvo1mknumc33fc2q05113d0t7hekdg4</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>
