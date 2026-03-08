@@ -12,10 +12,10 @@ class AdIds {
   static const String androidRewarded = 'ca-app-pub-1570373945115921/5269593106';
   
   // iOS 배너 광고 ID (실제 프로덕션)
-  static const String iosBanner = 'ca-app-pub-1570373945115921/9288437588';
+  static const String iosBanner = 'ca-app-pub-1570373945115921/1911635707';
   
   // iOS 리워드 광고 ID (실제 프로덕션)
-  static const String iosRewarded = 'ca-app-pub-1570373945115921/5269593106';
+  static const String iosRewarded = 'ca-app-pub-1570373945115921/5572154476';
   
   /// 플랫폼에 맞는 배너 광고 ID 반환
   static String get bannerAdUnitId {
