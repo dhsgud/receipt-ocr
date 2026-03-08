@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// 광고 ID 상수
 class AdIds {
@@ -261,9 +262,34 @@ final adProvider = StateNotifierProvider<AdNotifier, AdState>((ref) {
   return AdNotifier();
 });
 
+/// 광고 제거 여부 Provider (SharedPreferences 기반)
+final noAdsProvider = StateNotifierProvider<NoAdsNotifier, bool>((ref) {
+  return NoAdsNotifier();
+});
+
+class NoAdsNotifier extends StateNotifier<bool> {
+  static const String _key = 'no_ads';
+
+  NoAdsNotifier() : super(false) {
+    _load();
+  }
+
+  Future<void> _load() async {
+    final prefs = await SharedPreferences.getInstance();
+    state = prefs.getBool(_key) ?? false;
+  }
+
+  Future<void> setNoAds(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_key, value);
+    state = value;
+  }
+}
+
 /// 광고 표시 여부 Provider
-/// 항상 광고 표시 (구독 제거됨)
+/// AdMob 초기화 완료 && 광고 제거 설정이 OFF인 경우에만 광고 표시
 final shouldShowAdsProvider = Provider<bool>((ref) {
   final adState = ref.watch(adProvider);
-  return adState.isInitialized;
+  final noAds = ref.watch(noAdsProvider);
+  return adState.isInitialized && !noAds;
 });
