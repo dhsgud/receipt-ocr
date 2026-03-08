@@ -1,10 +1,9 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme/app_theme.dart';
 
-/// iOS 26-style Liquid Glass Bottom Navigation Bar
+/// Premium Bottom Navigation Bar — clean, reliable layout
 class LiquidBottomBar extends ConsumerStatefulWidget {
   final int currentIndex;
   final Function(int) onTap;
@@ -21,18 +20,18 @@ class LiquidBottomBar extends ConsumerStatefulWidget {
 
 class _LiquidBottomBarState extends ConsumerState<LiquidBottomBar>
     with SingleTickerProviderStateMixin {
-  late AnimationController _indicatorController;
-  late Animation<double> _indicatorAnimation;
+  late AnimationController _controller;
+  late Animation<double> _animation;
 
   @override
   void initState() {
     super.initState();
-    _indicatorController = AnimationController(
+    _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 350),
+      duration: const Duration(milliseconds: 300),
     );
-    _indicatorAnimation = CurvedAnimation(
-      parent: _indicatorController,
+    _animation = CurvedAnimation(
+      parent: _controller,
       curve: Curves.easeOutCubic,
     );
   }
@@ -41,13 +40,13 @@ class _LiquidBottomBarState extends ConsumerState<LiquidBottomBar>
   void didUpdateWidget(LiquidBottomBar oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.currentIndex != widget.currentIndex) {
-      _indicatorController.forward(from: 0);
+      _controller.forward(from: 0);
     }
   }
 
   @override
   void dispose() {
-    _indicatorController.dispose();
+    _controller.dispose();
     super.dispose();
   }
 
@@ -60,55 +59,32 @@ class _LiquidBottomBarState extends ConsumerState<LiquidBottomBar>
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    return Padding(
-      padding: const EdgeInsets.only(left: 20, right: 20, bottom: 28),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(28),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
-          child: AnimatedBuilder(
-            animation: _indicatorAnimation,
-            builder: (context, child) => Container(
-              height: 68,
-              decoration: BoxDecoration(
-                gradient: isDark
-                    ? AppColors.glassGradientDark
-                    : AppColors.glassGradientLight,
-                borderRadius: BorderRadius.circular(28),
-                border: Border.all(
-                  color: isDark
-                      ? Colors.white.withValues(alpha: 0.12)
-                      : Colors.white.withValues(alpha: 0.7),
-                  width: 0.5,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: isDark
-                        ? Colors.black.withValues(alpha: 0.3)
-                        : Colors.black.withValues(alpha: 0.08),
-                    blurRadius: 24,
-                    spreadRadius: -4,
-                    offset: const Offset(0, 8),
-                  ),
-                ],
-              ),
-              child: Row(
-                children: [
-                  _buildNavItem(0, Icons.home_rounded, Icons.home_outlined,
-                      '홈', isDark),
-                  _buildNavItem(1, Icons.calendar_month_rounded,
-                      Icons.calendar_today_outlined, '캘린더', isDark),
-                  _LiquidCenterButton(
-                    isSelected: widget.currentIndex == 2,
-                    onTap: () => _handleTap(2),
-                  ),
-                  _buildNavItem(3, Icons.pie_chart_rounded,
-                      Icons.pie_chart_outline, '통계', isDark),
-                  _buildNavItem(4, Icons.settings_rounded,
-                      Icons.settings_outlined, '설정', isDark),
-                ],
-              ),
-            ),
+    return Container(
+      decoration: BoxDecoration(
+        color: isDark
+            ? const Color(0xFF1C1C1E)
+            : Colors.white,
+        border: Border(
+          top: BorderSide(
+            color: isDark
+                ? Colors.white.withValues(alpha: 0.08)
+                : Colors.black.withValues(alpha: 0.06),
+            width: 0.5,
+          ),
+        ),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.only(top: 6, bottom: 4),
+          child: Row(
+            children: [
+              _buildNavItem(0, Icons.home_rounded, Icons.home_outlined, '홈', isDark),
+              _buildNavItem(1, Icons.calendar_month_rounded, Icons.calendar_today_outlined, '캘린더', isDark),
+              _buildCenterButton(isDark),
+              _buildNavItem(3, Icons.pie_chart_rounded, Icons.pie_chart_outline, '통계', isDark),
+              _buildNavItem(4, Icons.settings_rounded, Icons.settings_outlined, '설정', isDark),
+            ],
           ),
         ),
       ),
@@ -125,62 +101,45 @@ class _LiquidBottomBarState extends ConsumerState<LiquidBottomBar>
     final isSelected = widget.currentIndex == index;
     final activeColor = AppColors.primary;
     final inactiveColor = isDark
-        ? Colors.white.withValues(alpha: 0.45)
-        : Colors.black.withValues(alpha: 0.4);
+        ? Colors.white.withValues(alpha: 0.4)
+        : Colors.black.withValues(alpha: 0.35);
 
     return Expanded(
       child: GestureDetector(
         onTap: () => _handleTap(index),
         behavior: HitTestBehavior.opaque,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOutCubic,
+        child: SizedBox(
+          height: 50,
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // Indicator pill + icon
               AnimatedContainer(
-                duration: const Duration(milliseconds: 350),
-                curve: Curves.easeOutCubic,
-                padding:
-                    EdgeInsets.symmetric(horizontal: isSelected ? 14 : 8, vertical: 6),
-                decoration: BoxDecoration(
-                  color: isSelected
-                      ? AppColors.primary.withValues(alpha: isDark ? 0.18 : 0.12)
-                      : Colors.transparent,
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 250),
-                  child: Icon(
-                    isSelected ? activeIcon : inactiveIcon,
-                    key: ValueKey(isSelected),
-                    color: isSelected ? activeColor : inactiveColor,
-                    size: 24,
-                  ),
-                ),
-              ),
-              // Label fade-in for selected
-              AnimatedSize(
                 duration: const Duration(milliseconds: 250),
                 curve: Curves.easeOutCubic,
-                child: AnimatedOpacity(
-                  duration: const Duration(milliseconds: 200),
-                  opacity: isSelected ? 1.0 : 0.0,
-                  child: isSelected
-                      ? Padding(
-                          padding: const EdgeInsets.only(top: 2),
-                          child: Text(
-                            label,
-                            style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w600,
-                              color: activeColor,
-                              letterSpacing: 0.2,
-                            ),
-                          ),
-                        )
-                      : const SizedBox.shrink(),
+                padding: EdgeInsets.symmetric(
+                  horizontal: isSelected ? 14 : 8,
+                  vertical: 4,
+                ),
+                decoration: BoxDecoration(
+                  color: isSelected
+                      ? AppColors.primary.withValues(alpha: isDark ? 0.18 : 0.10)
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  isSelected ? activeIcon : inactiveIcon,
+                  color: isSelected ? activeColor : inactiveColor,
+                  size: 22,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+                  color: isSelected ? activeColor : inactiveColor,
+                  letterSpacing: 0.1,
                 ),
               ),
             ],
@@ -189,79 +148,39 @@ class _LiquidBottomBarState extends ConsumerState<LiquidBottomBar>
       ),
     );
   }
-}
 
-/// Special center receipt button with gradient glow
-class _LiquidCenterButton extends StatefulWidget {
-  final bool isSelected;
-  final VoidCallback onTap;
+  Widget _buildCenterButton(bool isDark) {
+    final isSelected = widget.currentIndex == 2;
 
-  const _LiquidCenterButton({
-    required this.isSelected,
-    required this.onTap,
-  });
-
-  @override
-  State<_LiquidCenterButton> createState() => _LiquidCenterButtonState();
-}
-
-class _LiquidCenterButtonState extends State<_LiquidCenterButton>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _scaleAnimation;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 150),
-    );
-    _scaleAnimation = Tween<double>(begin: 1.0, end: 0.92).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
-    );
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
     return Expanded(
       child: GestureDetector(
-        onTapDown: (_) => _controller.forward(),
-        onTapUp: (_) {
-          _controller.reverse();
+        onTap: () {
           HapticFeedback.mediumImpact();
-          widget.onTap();
+          widget.onTap(2);
         },
-        onTapCancel: () => _controller.reverse(),
         behavior: HitTestBehavior.opaque,
-        child: Center(
-          child: ScaleTransition(
-            scale: _scaleAnimation,
+        child: SizedBox(
+          height: 50,
+          child: Center(
             child: Container(
-              width: 50,
-              height: 50,
+              width: 46,
+              height: 46,
               decoration: BoxDecoration(
                 gradient: AppColors.primaryGradient,
                 shape: BoxShape.circle,
                 boxShadow: [
                   BoxShadow(
-                    color: AppColors.primary.withValues(alpha: 0.35),
-                    blurRadius: 14,
+                    color: AppColors.primary.withValues(alpha: isSelected ? 0.4 : 0.25),
+                    blurRadius: 10,
                     spreadRadius: 0,
-                    offset: const Offset(0, 4),
+                    offset: const Offset(0, 3),
                   ),
                 ],
               ),
               child: const Icon(
                 Icons.add_a_photo_rounded,
                 color: Colors.white,
-                size: 24,
+                size: 22,
               ),
             ),
           ),

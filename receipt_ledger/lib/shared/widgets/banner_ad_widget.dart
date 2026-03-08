@@ -60,9 +60,9 @@ class _BannerAdWidgetState extends ConsumerState<BannerAdWidget> {
       return const SizedBox.shrink();
     }
 
-    // 광고가 로드되지 않은 경우 — 공간만 확보
+    // 광고가 로드되지 않은 경우 — 공간 차지 안 함
     if (!_isLoaded || _bannerAd == null) {
-      return const SizedBox(height: 50);
+      return const SizedBox.shrink();
     }
 
     // 배너 광고 표시 (항상)
@@ -86,19 +86,17 @@ class AdContainer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      decoration: BoxDecoration(
-        color: Theme.of(context).scaffoldBackgroundColor,
-        border: Border(
-          bottom: BorderSide(
-            color: Theme.of(context).dividerColor,
-            width: 0.5,
-          ),
+    return AnimatedSize(
+      duration: const Duration(milliseconds: 200),
+      curve: Curves.easeOut,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        decoration: BoxDecoration(
+          color: Theme.of(context).scaffoldBackgroundColor,
         ),
+        child: Center(child: child),
       ),
-      child: Center(child: child),
     );
   }
 }
