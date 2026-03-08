@@ -16,6 +16,7 @@ import '../../data/services/budget_alert_service.dart';
 import '../../data/services/ad_service.dart';
 import '../../data/services/auth_service.dart';
 
+import '../../shared/widgets/banner_ad_widget.dart';
 import 'models/batch_receipt_item.dart';
 import 'widgets/receipt_form.dart';
 import 'widgets/batch_mode_view.dart';

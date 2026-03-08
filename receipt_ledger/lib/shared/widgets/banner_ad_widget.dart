@@ -15,11 +15,23 @@ class BannerAdWidget extends ConsumerStatefulWidget {
 class _BannerAdWidgetState extends ConsumerState<BannerAdWidget> {
   BannerAd? _bannerAd;
   bool _isLoaded = false;
+  bool _adRequested = false;
 
   @override
   void initState() {
     super.initState();
-    _loadAd();
+    // initState에서는 ref를 안전하게 사용할 수 없으므로 didChangeDependencies에서 처리
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // AdMob이 초기화된 경우에만 광고 로드
+    final isInitialized = ref.read(adProvider).isInitialized;
+    if (!kIsWeb && isInitialized && !_adRequested) {
+      _adRequested = true;
+      _loadAd();
+    }
   }
 
   void _loadAd() {
@@ -39,6 +51,7 @@ class _BannerAdWidgetState extends ConsumerState<BannerAdWidget> {
           }
         },
         onAdFailedToLoad: (ad, error) {
+          debugPrint('[BannerAdWidget] Failed to load banner: ${error.message} (code: ${error.code})');
           ad.dispose();
         },
       ),
@@ -58,6 +71,13 @@ class _BannerAdWidgetState extends ConsumerState<BannerAdWidget> {
     // 웹에서는 빈 위젯
     if (kIsWeb) {
       return const SizedBox.shrink();
+    }
+
+    // AdMob 초기화 상태 구독 → 초기화 완료되면 광고 자동 로드
+    final isInitialized = ref.watch(adProvider.select((s) => s.isInitialized));
+    if (isInitialized && !_adRequested) {
+      _adRequested = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) => _loadAd());
     }
 
     // 광고가 로드되지 않은 경우 — 공간 차지 안 함

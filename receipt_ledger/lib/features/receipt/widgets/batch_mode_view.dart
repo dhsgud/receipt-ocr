@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../data/models/category.dart';
+import '../../../shared/widgets/banner_ad_widget.dart';
 import '../models/batch_receipt_item.dart';
 
 class BatchModeView extends StatefulWidget {
@@ -137,6 +138,7 @@ class _BatchModeViewState extends State<BatchModeView> {
           ),
         ],
       ),
+      bottomNavigationBar: const BottomBannerAd(),
     );
   }
 
