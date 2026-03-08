@@ -5,7 +5,7 @@ class AppConstants {
   
   // Sync Server
   /// 기본 서버 URL (설정에서 변경 가능)
-  static const String syncServerUrl = 'https://api.receipt-kdh.com';
+  static const String syncServerUrl = 'http://receipt-kdh.kro.kr:9999';
 
   
   // App Info
