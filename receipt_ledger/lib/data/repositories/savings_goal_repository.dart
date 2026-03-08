@@ -67,6 +67,12 @@ class SavingsGoalRepository {
     await _saveGoals(goals);
   }
 
+  /// Clear all goals (for data reset / account switch)
+  Future<void> clearAllGoals() async {
+    await _ensureInitialized();
+    await _prefs!.remove(_storageKey);
+  }
+
   /// 전체 목표 조회
   Future<List<SavingsGoal>> getAllGoals() async {
     return await _loadGoals();

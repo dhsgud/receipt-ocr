@@ -11,11 +11,11 @@ class AdIds {
   // Android 리워드 광고 ID
   static const String androidRewarded = 'ca-app-pub-1570373945115921/5269593106';
   
-  // iOS 배너 광고 ID (테스트)
-  static const String iosBanner = 'ca-app-pub-3940256099942544/2934735716';
+  // iOS 배너 광고 ID (실제 프로덕션)
+  static const String iosBanner = 'ca-app-pub-1570373945115921/9288437588';
   
-  // iOS 리워드 광고 ID (테스트)
-  static const String iosRewarded = 'ca-app-pub-3940256099942544/1712485313';
+  // iOS 리워드 광고 ID (실제 프로덕션)
+  static const String iosRewarded = 'ca-app-pub-1570373945115921/5269593106';
   
   /// 플랫폼에 맞는 배너 광고 ID 반환
   static String get bannerAdUnitId {
@@ -44,6 +44,7 @@ class AdState {
   final bool isInitialized;
   final bool isBannerLoaded;
   final bool isRewardedLoaded;
+  final bool isRewardedLoading;
   final BannerAd? bannerAd;
   final RewardedAd? rewardedAd;
 
@@ -51,6 +52,7 @@ class AdState {
     this.isInitialized = false,
     this.isBannerLoaded = false,
     this.isRewardedLoaded = false,
+    this.isRewardedLoading = false,
     this.bannerAd,
     this.rewardedAd,
   });
@@ -59,6 +61,7 @@ class AdState {
     bool? isInitialized,
     bool? isBannerLoaded,
     bool? isRewardedLoaded,
+    bool? isRewardedLoading,
     BannerAd? bannerAd,
     RewardedAd? rewardedAd,
     bool clearRewarded = false,
@@ -67,6 +70,7 @@ class AdState {
       isInitialized: isInitialized ?? this.isInitialized,
       isBannerLoaded: isBannerLoaded ?? this.isBannerLoaded,
       isRewardedLoaded: isRewardedLoaded ?? this.isRewardedLoaded,
+      isRewardedLoading: isRewardedLoading ?? this.isRewardedLoading,
       bannerAd: bannerAd ?? this.bannerAd,
       rewardedAd: clearRewarded ? null : (rewardedAd ?? this.rewardedAd),
     );
@@ -77,23 +81,15 @@ class AdState {
 class AdNotifier extends StateNotifier<AdState> {
   AdNotifier() : super(const AdState());
 
+  int _rewardedLoadRetryCount = 0;
+  static const int _maxRetries = 3;
+
   /// AdMob 초기화
   Future<void> init() async {
     if (kIsWeb) return;
     
     try {
       await MobileAds.instance.initialize();
-      
-      // 테스트 기기 설정 - 실제 광고 ID를 사용하면서도 테스트 광고를 표시
-      // 로그에서 "Use RequestConfiguration.Builder.setTestDeviceIds(Arrays.asList("XXXXX"))"
-      // 메시지를 확인하여 실제 디바이스 해시 ID를 아래에 추가하세요.
-      await MobileAds.instance.updateRequestConfiguration(
-        RequestConfiguration(
-          testDeviceIds: const bool.fromEnvironment('dart.vm.product')
-              ? []
-              : ['F84A7F5F2A7EBC7EDD9709EA35F339F2'],
-        ),
-      );
       
       state = state.copyWith(isInitialized: true);
       
@@ -102,6 +98,7 @@ class AdNotifier extends StateNotifier<AdState> {
       // 리워드 광고 미리 로드
       await loadRewardedAd();
     } catch (e) {
+      debugPrint('[AdService] init failed: $e');
       state = state.copyWith(isInitialized: false);
     }
   }
@@ -119,6 +116,7 @@ class AdNotifier extends StateNotifier<AdState> {
           state = state.copyWith(isBannerLoaded: true, bannerAd: ad as BannerAd);
         },
         onAdFailedToLoad: (ad, error) {
+          debugPrint('[AdService] Banner failed: ${error.message}');
           ad.dispose();
           state = state.copyWith(isBannerLoaded: false);
         },
@@ -131,19 +129,63 @@ class AdNotifier extends StateNotifier<AdState> {
   /// 리워드 광고 로드
   Future<void> loadRewardedAd() async {
     if (!state.isInitialized || kIsWeb) return;
+    if (state.isRewardedLoading) return; // 중복 로드 방지
+    
+    state = state.copyWith(isRewardedLoading: true);
     
     await RewardedAd.load(
       adUnitId: AdIds.rewardedAdUnitId,
       request: const AdRequest(),
       rewardedAdLoadCallback: RewardedAdLoadCallback(
         onAdLoaded: (ad) {
-          state = state.copyWith(isRewardedLoaded: true, rewardedAd: ad);
+          debugPrint('[AdService] Rewarded ad loaded successfully');
+          _rewardedLoadRetryCount = 0;
+          state = state.copyWith(
+            isRewardedLoaded: true, 
+            isRewardedLoading: false,
+            rewardedAd: ad,
+          );
         },
         onAdFailedToLoad: (error) {
-          state = state.copyWith(isRewardedLoaded: false);
+          debugPrint('[AdService] Rewarded ad failed to load: ${error.message} (code: ${error.code})');
+          state = state.copyWith(
+            isRewardedLoaded: false, 
+            isRewardedLoading: false,
+          );
+          
+          // 자동 재시도 (최대 3회, 지수 백오프)
+          if (_rewardedLoadRetryCount < _maxRetries) {
+            _rewardedLoadRetryCount++;
+            final delay = Duration(seconds: _rewardedLoadRetryCount * 2);
+            debugPrint('[AdService] Retrying rewarded ad load in ${delay.inSeconds}s (attempt $_rewardedLoadRetryCount)');
+            Future.delayed(delay, () {
+              if (!state.isRewardedLoaded) {
+                loadRewardedAd();
+              }
+            });
+          }
         },
       ),
     );
+  }
+
+  /// 리워드 광고가 준비될 때까지 대기 (최대 10초)
+  Future<bool> waitForRewardedAd() async {
+    if (isRewardedAdReady) return true;
+    
+    // 아직 로드 안 됐으면 시도
+    if (!state.isRewardedLoading) {
+      _rewardedLoadRetryCount = 0;
+      await loadRewardedAd();
+    }
+    
+    // 최대 10초 대기
+    for (int i = 0; i < 20; i++) {
+      await Future.delayed(const Duration(milliseconds: 500));
+      if (isRewardedAdReady) return true;
+    }
+    
+    return isRewardedAdReady;
   }
 
   /// 리워드 광고 표시 및 보상 콜백
@@ -151,6 +193,7 @@ class AdNotifier extends StateNotifier<AdState> {
     required Function() onRewarded,
   }) async {
     if (!state.isRewardedLoaded || state.rewardedAd == null) {
+      debugPrint('[AdService] Rewarded ad not ready');
       return false;
     }
     
@@ -159,15 +202,19 @@ class AdNotifier extends StateNotifier<AdState> {
     
     state.rewardedAd!.fullScreenContentCallback = FullScreenContentCallback(
       onAdDismissedFullScreenContent: (ad) {
+        debugPrint('[AdService] Rewarded ad dismissed');
         ad.dispose();
-        state = state.copyWith(isRewardedLoaded: false, clearRewarded: true);
+        state = state.copyWith(isRewardedLoaded: false, isRewardedLoading: false, clearRewarded: true);
         // 다음 광고 미리 로드
+        _rewardedLoadRetryCount = 0;
         loadRewardedAd();
         if (!completer.isCompleted) completer.complete();
       },
       onAdFailedToShowFullScreenContent: (ad, error) {
+        debugPrint('[AdService] Rewarded ad failed to show: ${error.message}');
         ad.dispose();
-        state = state.copyWith(isRewardedLoaded: false, clearRewarded: true);
+        state = state.copyWith(isRewardedLoaded: false, isRewardedLoading: false, clearRewarded: true);
+        _rewardedLoadRetryCount = 0;
         loadRewardedAd();
         if (!completer.isCompleted) completer.complete();
       },
@@ -175,13 +222,19 @@ class AdNotifier extends StateNotifier<AdState> {
     
     await state.rewardedAd!.show(
       onUserEarnedReward: (ad, reward) {
+        debugPrint('[AdService] User earned reward: ${reward.amount} ${reward.type}');
         wasRewarded = true;
         onRewarded();
       },
     );
     
-    // 광고가 완전히 닫힐 때까지 대기
-    await completer.future;
+    // 광고가 완전히 닫힐 때까지 대기 (최대 30초 타임아웃)
+    await completer.future.timeout(
+      const Duration(seconds: 30),
+      onTimeout: () {
+        debugPrint('[AdService] Rewarded ad timeout');
+      },
+    );
     
     return wasRewarded;
   }

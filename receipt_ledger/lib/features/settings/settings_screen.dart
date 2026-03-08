@@ -5,6 +5,7 @@ import '../../core/theme/app_theme.dart';
 import '../../shared/providers/app_providers.dart';
 import '../../shared/widgets/common_widgets.dart';
 import '../../data/services/auth_service.dart';
+import '../../data/services/quota_service.dart';
 import 'category_dashboard_screen.dart';
 import 'calendar_settings_screen.dart';
 import 'widgets/sync_section.dart';
@@ -544,7 +545,22 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   );
 
                   if (shouldLogout == true) {
-                    ref.read(authProvider.notifier).signOut();
+                    // 모든 로컬 데이터 삭제 (계정 전환 시 데이터 격리)
+                    final transRepo = ref.read(transactionRepositoryProvider);
+                    final budgetRepo = ref.read(budgetRepositoryProvider);
+                    final fixedExpenseRepo = ref.read(fixedExpenseRepositoryProvider);
+                    final savingsGoalRepo = ref.read(savingsGoalRepositoryProvider);
+                    final syncService = ref.read(syncServiceProvider);
+                    
+                    await transRepo.clearAllTransactions();
+                    await budgetRepo.clearAllBudgets();
+                    await fixedExpenseRepo.clearAllFixedExpenses();
+                    await savingsGoalRepo.clearAllGoals();
+                    await syncService.clearSyncData();
+                    await ref.read(quotaProvider.notifier).resetQuota();
+                    
+                    // 로그아웃
+                    await ref.read(authProvider.notifier).signOut();
                   }
                 },
                 child: const Text(

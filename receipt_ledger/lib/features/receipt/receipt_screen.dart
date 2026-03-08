@@ -407,24 +407,48 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
     });
   }
 
-  /// 리워드 광고 바로 표시 (무료 횟수 소진 시)
+  /// 리워드 광고 표시 (무료 횟수 소진 시) — 바로 광고 재생
   Future<void> _showRewardedAdDialog() async {
     final adNotifier = ref.read(adProvider.notifier);
     
-    // 광고가 준비되지 않은 경우
+    // 광고가 아직 준비 안 됐으면 로딩 표시 후 대기
     if (!adNotifier.isRewardedAdReady) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('광고를 불러오는 중입니다. 잠시 후 다시 시도해주세요.'),
-            duration: Duration(seconds: 2),
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => const AlertDialog(
+            content: Row(
+              children: [
+                CircularProgressIndicator(color: AppColors.primary),
+                SizedBox(width: 20),
+                Text('광고를 불러오는 중...'),
+              ],
+            ),
           ),
         );
       }
-      return;
+      
+      // 최대 10초 대기
+      final adReady = await adNotifier.waitForRewardedAd();
+      
+      // 로딩 다이얼로그 닫기
+      if (mounted && Navigator.canPop(context)) {
+        Navigator.of(context).pop();
+      }
+      
+      if (!adReady && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('광고를 불러올 수 없습니다. 잠시 후 다시 시도해주세요.'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+        return;
+      }
     }
     
-    // 바로 리워드 광고 표시
+    // 바로 광고 표시
     final rewarded = await adNotifier.showRewardedAd(
       onRewarded: () async {
         final serverUrl = ref.read(ocrServerUrlProvider);
@@ -438,8 +462,15 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
     );
     
     if (rewarded && mounted) {
-      // 보너스 적립 후 자동으로 영수증 분석 재시도 (알림 없이)
+      // 보너스 적립 후 자동으로 영수증 분석 재시도
       await _processReceipt();
+    } else if (!rewarded && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('광고 시청이 완료되지 않았습니다. 다시 시도해주세요.'),
+          duration: Duration(seconds: 2),
+        ),
+      );
     }
   }
 

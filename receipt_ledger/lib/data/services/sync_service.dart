@@ -166,6 +166,24 @@ class SyncService {
     return '알 수 없음';
   }
 
+  /// Clear all sync-related data (for account switch)
+  Future<void> clearSyncData() async {
+    await _ensureInitialized();
+    _myKey = null;
+    _partnerKey = null;
+    _lastSyncTime = null;
+    _myNickname = '';
+    _partnerNickname = '';
+    _userEmail = null;
+    _isSyncing = false;
+    await _prefs!.remove(_myKeyField);
+    await _prefs!.remove(_partnerKeyField);
+    await _prefs!.remove(_lastSyncTimeField);
+    await _prefs!.remove(_myNicknameField);
+    await _prefs!.remove(_partnerNicknameField);
+    await _prefs!.remove(_migrationDoneField);
+  }
+
   /// Check if a transaction belongs to me
   bool isMyTransaction(String ownerKey) => ownerKey == _myKey || ownerKey == _userEmail;
 

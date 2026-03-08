@@ -99,6 +99,12 @@ class BudgetRepository {
     return count;
   }
 
+  /// Clear all budgets (for data reset / account switch)
+  Future<void> clearAllBudgets() async {
+    await _ensureInitialized();
+    await _prefs!.remove(_storageKey);
+  }
+
   /// Reset sync status for all budgets (for re-sync with new partner)
   Future<void> resetAllSyncStatus() async {
     final budgets = await _loadBudgets();

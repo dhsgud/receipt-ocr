@@ -94,6 +94,12 @@ class FixedExpenseRepository {
     return count;
   }
 
+  /// Clear all fixed expenses (for data reset / account switch)
+  Future<void> clearAllFixedExpenses() async {
+    await _ensureInitialized();
+    await _prefs!.remove(_storageKey);
+  }
+
   /// Reset sync status for all fixed expenses (for re-sync with new partner)
   Future<void> resetAllSyncStatus() async {
     final expenses = await _loadFixedExpenses();
