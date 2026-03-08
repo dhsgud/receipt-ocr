@@ -16,6 +16,7 @@ class _BannerAdWidgetState extends ConsumerState<BannerAdWidget> {
   BannerAd? _bannerAd;
   bool _isLoaded = false;
   bool _adRequested = false;
+  String _statusMessage = '광고 대기중...';
 
   @override
   void initState() {
@@ -38,6 +39,12 @@ class _BannerAdWidgetState extends ConsumerState<BannerAdWidget> {
     // 웹에서는 광고 표시 안 함
     if (kIsWeb) return;
 
+    if (mounted) {
+      setState(() {
+        _statusMessage = '광고 로드중... (${AdIds.bannerAdUnitId})';
+      });
+    }
+
     _bannerAd = BannerAd(
       adUnitId: AdIds.bannerAdUnitId,
       size: AdSize.banner,
@@ -47,12 +54,18 @@ class _BannerAdWidgetState extends ConsumerState<BannerAdWidget> {
           if (mounted) {
             setState(() {
               _isLoaded = true;
+              _statusMessage = '광고 로드 성공!';
             });
           }
         },
         onAdFailedToLoad: (ad, error) {
           debugPrint('[BannerAdWidget] Failed to load banner: ${error.message} (code: ${error.code})');
           ad.dispose();
+          if (mounted) {
+            setState(() {
+              _statusMessage = '❌ ${error.message} (code:${error.code})';
+            });
+          }
         },
       ),
     );
@@ -80,17 +93,25 @@ class _BannerAdWidgetState extends ConsumerState<BannerAdWidget> {
       WidgetsBinding.instance.addPostFrameCallback((_) => _loadAd());
     }
 
-    // 광고가 로드되지 않은 경우 — 공간 차지 안 함
-    if (!_isLoaded || _bannerAd == null) {
-      return const SizedBox.shrink();
+    // 광고가 로드된 경우 표시
+    if (_isLoaded && _bannerAd != null) {
+      return Container(
+        width: _bannerAd!.size.width.toDouble(),
+        height: _bannerAd!.size.height.toDouble(),
+        alignment: Alignment.center,
+        child: AdWidget(ad: _bannerAd!),
+      );
     }
 
-    // 배너 광고 표시 (항상)
+    // 광고 로드 상태 표시 (디버그용 — 나중에 SizedBox.shrink()로 변경)
     return Container(
-      width: _bannerAd!.size.width.toDouble(),
-      height: _bannerAd!.size.height.toDouble(),
+      height: 50,
       alignment: Alignment.center,
-      child: AdWidget(ad: _bannerAd!),
+      child: Text(
+        _statusMessage,
+        style: TextStyle(fontSize: 10, color: Colors.grey[500]),
+        textAlign: TextAlign.center,
+      ),
     );
   }
 }

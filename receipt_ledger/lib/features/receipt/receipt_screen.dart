@@ -439,10 +439,15 @@ class _ReceiptScreenState extends ConsumerState<ReceiptScreen> {
       }
       
       if (!adReady && mounted) {
+        final errorMsg = ref.read(adProvider).rewardedError;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('광고를 불러올 수 없습니다. 잠시 후 다시 시도해주세요.'),
-            duration: Duration(seconds: 2),
+          SnackBar(
+            content: Text(
+              errorMsg != null 
+                ? '광고를 불러올 수 없습니다: $errorMsg\n잠시 후 다시 시도해주세요.'
+                : '광고를 불러올 수 없습니다. 잠시 후 다시 시도해주세요.'
+            ),
+            duration: const Duration(seconds: 4),
           ),
         );
         return;
